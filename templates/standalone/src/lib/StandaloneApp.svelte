@@ -6,6 +6,7 @@
   import RenderNode from './RenderNode.svelte';
 
   const revision = projectRevision(project);
+  const primaryNames = Object.fromEntries(project.models.map(model => [model.id, model.fields.find(field => field.primary)?.name]));
   const endpoint = '/api/runtime';
   let currentPage = project.pages[0];
   let fields = {};
@@ -16,6 +17,7 @@
   let password = '';
   let notice = '';
   let busy = false;
+  let pendingWorkflow = null;
 
   const headers = { 'x-studio-project-id': project.id, 'x-studio-project-revision': revision };
   function setPage(pageId, push = true) {
@@ -25,6 +27,7 @@
     fields = {};
     selected = {};
     notice = '';
+    pendingWorkflow = null;
     if (push && typeof window !== 'undefined') window.history.pushState({}, '', page.path);
   }
   function change(field, value) { fields = { ...fields, [field]: value }; }
@@ -45,7 +48,7 @@
   async function request(path, options = {}) {
     const response = await fetch(endpoint + path, { credentials: 'same-origin', cache: 'no-store', ...options, headers: { ...headers, ...(options.headers ?? {}) } });
     const body = await response.json();
-    if (!response.ok) throw Error(body?.error ?? `Request failed (${response.status})`);
+    if (!response.ok) { const error = Error(body?.error ?? `Request failed (${response.status})`); error.status = response.status; throw error; }
     return body;
   }
   async function refreshStatus() {
@@ -76,7 +79,7 @@
   }
   async function logout() {
     busy = true;
-    try { await request('/auth/logout', { method:'POST' }); runtime = null; records = {}; selected = {}; fields = {}; await refreshStatus(); }
+    try { await request('/auth/logout', { method:'POST' }); runtime = null; records = {}; selected = {}; fields = {}; pendingWorkflow = null; await refreshStatus(); }
     catch(error){notice=error.message;}finally{busy=false;}
   }
   function boundValues(modelId) {
@@ -110,10 +113,15 @@
       if (workflow) {
         const destructive = workflow.steps.some(s => s.type === 'delete');
         if (destructive && !window.confirm('Delete selected records?')) return;
+        const payload = { pageId: currentPage.id, componentId: node.id, fields, selectedRecords: selected, confirmDelete: destructive };
+        const fingerprint = JSON.stringify({workflowId: workflow.id, payload});
+        const key = pendingWorkflow?.fingerprint === fingerprint ? pendingWorkflow.key : crypto.randomUUID();
+        pendingWorkflow = {fingerprint, key};
         const result = await request('/workflows/' + encodeURIComponent(workflow.id), {
-          method: 'POST', headers: { 'content-type':'application/json', 'idempotency-key': crypto.randomUUID() },
-          body: JSON.stringify({ pageId: currentPage.id, componentId: node.id, fields, selectedRecords: selected, confirmDelete: destructive })
+          method: 'POST', headers: { 'content-type':'application/json', 'idempotency-key': key },
+          body: JSON.stringify(payload)
         });
+        pendingWorkflow = null;
         applyEffects(result.effects);
         await refreshRecords();
         if (!result.effects.some(e => e.type === 'message')) notice = 'Workflow completed';
@@ -131,7 +139,7 @@
       });
       notice = 'Record ' + (props.action === 'delete' ? 'deleted' : 'saved');
       await refreshRecords();
-    } catch(error) { notice = error.message; }
+    } catch(error) { if (error.status === 409) pendingWorkflow = null; notice = error.message; }
     finally { busy = false; }
   }
   onMount(() => {
@@ -171,7 +179,7 @@
     {#if runtime && !runtime.enabled}<p class="warning">Database runtime unavailable. This generated application remains usable for navigation and layout preview, but persistent records require configured localhost MySQL and a local account.</p>{/if}
     <div class="canvas">
       {#each currentPage.components as node (node.id)}
-        <RenderNode {node} {fields} {records} {selected} {busy} {action} {change} {choose} />
+        <RenderNode {node} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} />
       {/each}
     </div>
   </main></div>

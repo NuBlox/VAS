@@ -4,6 +4,7 @@
   export let fields;
   export let records;
   export let selected;
+  export let primaryNames;
   export let busy = false;
   export let action;
   export let change;
@@ -17,7 +18,7 @@
   <section class:columns={node.type === 'columns'} class="container">
     {#if props.title}<h2>{props.title}</h2>{/if}
     {#each node.children ?? [] as child (child.id)}
-      <svelte:self node={child} {fields} {records} {selected} {busy} {action} {change} {choose} />
+      <svelte:self node={child} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} />
     {/each}
   </section>
 {:else if node.type === 'heading'}
@@ -53,7 +54,7 @@
     {:else}
       <table><thead><tr><th>Selection</th>{#each columns as col}<th>{col}</th>{/each}</tr></thead><tbody>
         {#each records[props.bindingModelId] ?? [] as item, index}
-          <tr><td><input type="radio" name={'selected-' + props.bindingModelId} checked={String(selected[props.bindingModelId] ?? '') === String(item.id)} aria-label={'Select row ' + (index + 1)} on:change={() => choose(props.bindingModelId, item)} /></td>
+          <tr><td><input type="radio" name={'selected-' + props.bindingModelId} checked={String(selected[props.bindingModelId] ?? '') === String(item[primaryNames[props.bindingModelId]])} aria-label={'Select row ' + (index + 1)} on:change={() => choose(props.bindingModelId, item)} /></td>
             {#each columns as col}<td>{String(item[col] ?? '')}</td>{/each}
           </tr>
         {:else}<tr><td colspan={columns.length + 1}>No records loaded</td></tr>{/each}
