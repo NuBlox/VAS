@@ -1,11 +1,11 @@
 <script>
   import '../app.css';
   import { onMount } from 'svelte';
-  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes } from '$lib/studio/model.js';
-  import { exportPageToSvelte, exportMySQL } from '$lib/studio/compiler.js';
-  import { projectRevision } from '$lib/studio/revision.js';
-  import { validateRecord } from '$lib/studio/records.js';
-  import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow } from '$lib/studio/workflow.js';
+  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes } from '#lib/studio/model.js';
+  import { exportPageToSvelte, exportMySQL } from '#lib/studio/compiler.js';
+  import { projectRevision } from '#lib/studio/revision.js';
+  import { validateRecord } from '#lib/studio/records.js';
+  import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow } from '#lib/studio/workflow.js';
 
   const STORE='visual-application-studio-v1';
   const properties={

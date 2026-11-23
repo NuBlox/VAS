@@ -1,6 +1,6 @@
 # Visual Application Studio · Alpha 0.4 — Visual Workflow Designer
 
-An independent, metadata-driven SvelteKit/Svelte application builder with visual UI components, hierarchical layouts, a relational data modeller, a **local-only MySQL CRUD development runtime**, and now a **visual workflow graph editor**. Alpha 0.4 implements the next milestone after the 0.3 CRUD release.
+An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a **local-only MySQL CRUD development runtime**, and now a **visual workflow graph editor**. Alpha 0.4 implements the next milestone after the 0.3 CRUD release.
 
 **Status:** functional prototype; **not production ready**. There is no authentication, RBAC, tenancy, hosted deployment, or server-side workflow enforcement. The visual workflow engine runs **in the browser** and invokes existing local development API endpoints for database steps. Production use requires an authenticated server execution runtime and server-side policies. This is not a general-purpose executable scripting platform.
 
@@ -28,7 +28,7 @@ Open `preview/workflows.html` in a browser (or use `preview/index.html`). Click 
 
 ## macOS: install, test and launch the integrated SvelteKit editor
 
-Requirements: Node.js **22+**, npm, MySQL 8+ (only when using MySQL preview). Clone the GitHub repository (or use the downloadable ZIP):
+Requirements: Node.js **22.17+**, npm, MySQL 8+ (only when using MySQL preview). Clone the GitHub repository (or use the downloadable ZIP):
 
 ```bash
 brew install node mysql
@@ -108,7 +108,7 @@ Workflow steps are declarative JSON. The interpreter never evaluates user-author
 - **27/27** dependency-free Node tests pass: original designer/DDL, CRUD test doubles, v1/v2 migration, graph validation (including cycle/orphan prevention), conditions, sequential execution, failure propagation and revision integrity.
 - Workflow demo has been exercised in Chromium using both true/false paths, memory record creation and connected step insertion. The demo does not perform live database requests.
 - `node --check` passes for all standalone JavaScript modules and the extracted page `<script>`.
-- `npm install` could not reach `registry.npmjs.org` in this build environment (`EAI_AGAIN`). Therefore **`npm run check`, `npm run build`, the integrated SvelteKit UI, and a real MySQL connection remain unverified**. Run the commands above on your Mac and resolve any resulting dependency/compiler issues before treating the integrated builder as validated.
+- `npm install` could not reach `registry.npmjs.org` in the local build environment (`EAI_AGAIN`). GitHub Actions validates dependency installation, `npm run check` and the production build; a real MySQL connection still requires a configured local database. Run the commands above on your Mac and resolve any resulting dependency/compiler issues before treating the integrated builder as validated.
 - Source is maintained in NuBlox/VAS. The GitHub Actions workflow runs tests, type analysis and the production build on pull requests and main.
 
 ## Next engineering work

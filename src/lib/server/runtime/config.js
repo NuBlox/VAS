@@ -1,7 +1,7 @@
 import published from '../../../../runtime/project.json' with { type:'json' };
-import { validateProject } from '$lib/studio/model.js';
-import { dev } from '$app/environment';
-import { projectRevision } from '$lib/studio/revision.js';
+import { validateProject } from '#lib/studio/model.js';
+import { dev } from '$app/env';
+import { projectRevision } from '#lib/studio/revision.js';
 import { error, json } from '@sveltejs/kit';
 
 export const publishedProject=validateProject(published);
