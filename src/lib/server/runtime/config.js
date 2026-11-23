@@ -3,6 +3,7 @@ import { validateProject } from '#lib/studio/model.js';
 import { dev } from '$app/env';
 import { projectRevision } from '#lib/studio/revision.js';
 import { error, json } from '@sveltejs/kit';
+import { currentActor, readLocalUsers, requireRole } from './auth.js';
 
 export const publishedProject=validateProject(published);
 const localhost=new Set(['localhost','127.0.0.1','[::1]','::1']);
@@ -15,10 +16,12 @@ export function runtimeStatus(event,env){
   const local=localhost.has(event.url.hostname)&&loopbackClients.has(clientAddress);
   const enabled=dev&&local&&env.ENABLE_LOCAL_RUNTIME==='true';
   const configured=Boolean(env.DB_HOST&&env.DB_USER&&env.DB_NAME);
-  return {enabled:enabled&&configured,configured,local,projectId:publishedProject.id,projectName:publishedProject.name,revision:projectRevision(publishedProject),
+  const users=readLocalUsers();
+  const actor=enabled&&configured?currentActor(event,users):null;
+  return {enabled:enabled&&configured,configured,local,authConfigured:Boolean(users),authenticated:Boolean(actor),actor:actor??null,projectId:publishedProject.id,projectName:publishedProject.name,revision:projectRevision(publishedProject),
     reason:!dev?'Production runtime blocked until authentication and authorisation are implemented':!local?'Use localhost to access the development runtime':env.ENABLE_LOCAL_RUNTIME!=='true'?'Set ENABLE_LOCAL_RUNTIME=true to enable local MySQL access':!configured?'DB_HOST, DB_USER and DB_NAME are required':''};
 }
-export function requireRuntime(event,env,mutation=false){
+export function requireRuntime(event,env,mutation=false,role='viewer'){
   const status=runtimeStatus(event,env);
   if(!status.enabled)throw error(503,status.reason);
   if(mutation){
@@ -27,6 +30,7 @@ export function requireRuntime(event,env,mutation=false){
   }
   const clientId=event.request.headers.get('x-studio-project-id');
   if(clientId!==publishedProject.id||event.request.headers.get('x-studio-project-revision')!==projectRevision(publishedProject))throw error(409,'Editor project differs from published runtime. Export JSON, publish it locally and restart the server.');
+  requireRole(currentActor(event),role);
   return publishedProject;
 }
 export async function readPayload(request){

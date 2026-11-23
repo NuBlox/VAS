@@ -1,8 +1,31 @@
-# Visual Application Studio · Alpha 0.5 — Server Workflow Transactions
+# Visual Application Studio · Alpha 0.6 — Local Authentication, Roles & Audit
 
-An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a local-only MySQL runtime, a visual workflow graph editor, and **transactional server-side workflow execution**. Alpha 0.5 builds on the Alpha 0.4 workflow designer.
+An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a local-only MySQL runtime, a visual workflow graph editor, and **transactional server-side workflow execution**. Alpha 0.6 builds on the transactional server-side workflow runtime introduced in v0.5.
 
-**Status:** functional prototype; **not production ready**. There is no authentication, RBAC, tenancy or hosted deployment. MySQL-mode workflows now execute server-side using **published** metadata and a single transaction, but this is still a localhost-only developer tool, **not an authenticated production backend**. Browser-memory preview continues to simulate workflows without a database. This is not a general-purpose scripting platform.
+**Status:** functional LOCAL prototype, **not production ready**. Version 0.6 adds local sign-in, basic role-based access control and MySQL audit records, but does **not** provide multi-tenant identity management, hosted deployment, secure TLS termination, account recovery, cross-process session storage, enterprise policy management or production hardening. All MySQL routes remain disabled outside loopback development. Browser-memory preview works without sign-in or a database. Do not expose this tool publicly or use real personal/customer records.
+
+## New in Alpha 0.6
+
+- **Opt-in local accounts** with Node scrypt-derived password hashes in Git-ignored `.vas/users.local.json` (never plaintext passwords in Git).
+- **Opaque HTTP-only, SameSite=Strict session cookies**, four-hour expiry, server-memory revocation on sign-out; identities and roles are checked against the local user file on each request. Sessions do **not** survive a server restart.
+- **Three local roles:** viewer (read records), editor (viewer plus create/update and non-deleting workflows), admin (editor plus delete and audit history). A workflow containing **any** delete step requires admin, even if a condition would skip it.
+- **Transaction-coupled audit metadata:** successful direct CRUD and workflows write an audit event before committing the same MySQL transaction. If that insert fails, the business transaction rolls back. Rejected operations attempt a separate post-rollback audit entry; audit outages cannot be guaranteed to record failed operations.
+- **Separate `visual_studio_audit` database:** limits the application user to INSERT/SELECT on audit rows, without letting the business schema's UPDATE/DELETE grants modify them. Apply `runtime/audit.mysql.sql` once as an administrator.
+- **Administrator audit viewer**, new `/api/runtime/audit` endpoint, local sign-in/out controls and user-bootstrap script.
+- No change to application metadata schema v3; only the separate audit table must be provisioned. This is a **local security layer**, not production authentication or permission governance.
+
+### Local role and permission matrix
+
+| Capability | Viewer | Editor | Admin |
+|---|---|---|---|
+| Read published records | Yes | Yes | Yes |
+| Create/update records | No | Yes | Yes |
+| Execute workflow without mutations | Yes | Yes | Yes |
+| Execute create/update workflow | No | Yes | Yes |
+| Execute any workflow containing deletion | No | No | Yes |
+| Delete records and inspect audit history | No | No | Yes |
+
+The **visual editor and memory preview** remain usable offline regardless of role; these permissions govern only the loopback MySQL API. The application definition is still published by a trusted local administrator using the CLI; editor roles do not mean that project publication is remotely authorised.
 
 ## New in Alpha 0.5
 
@@ -56,28 +79,40 @@ npm run dev -- --host 127.0.0.1 --open
 
 To use only the page builder and memory-only workflows, **MySQL is not required**; omit the MySQL Homebrew commands. The development URL is `http://127.0.0.1:5173` or the printed port.
 
-## Enable local MySQL CRUD preview
+## Enable authenticated local MySQL CRUD preview
 
 Run these SQL commands from an administrative MySQL session on a **development-only** instance (replace the password):
 
 ```sql
 CREATE DATABASE IF NOT EXISTS visual_studio_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS visual_studio_audit CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER IF NOT EXISTS 'visual_studio_dev'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_A_STRONG_LOCAL_PASSWORD';
 GRANT SELECT, INSERT, UPDATE, DELETE ON visual_studio_dev.* TO 'visual_studio_dev'@'127.0.0.1';
+GRANT SELECT, INSERT ON visual_studio_audit.* TO 'visual_studio_dev'@'127.0.0.1';
 ```
 
 For an **empty** development database only, apply the example generated schema:
 
 ```bash
 mysql -u root -p visual_studio_dev < runtime/schema.mysql.sql
+mysql -u root -p < runtime/audit.mysql.sql
 cp .env.example .env
 nano .env
+
+# Create the first local admin without echoing or persisting the plaintext password.
+printf 'New VAS local password: '
+read -rs VAS_BOOTSTRAP_PASSWORD
+printf '\n'
+export VAS_BOOTSTRAP_PASSWORD
+npm run auth:user -- operator admin
+unset VAS_BOOTSTRAP_PASSWORD
+
 npm run dev -- --host 127.0.0.1 --open
 ```
 
-Set `DB_PASSWORD` in `.env`. Sample values from `.env.example`: `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=visual_studio_dev`, `DB_NAME=visual_studio_dev`, `ENABLE_LOCAL_RUNTIME=true`. Keep `.env` private; it is Git-ignored. The application MySQL user must **not** have schema-altering grants.
+Set `DB_PASSWORD` in `.env`. Sample values from `.env.example`: `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=visual_studio_dev`, `DB_NAME=visual_studio_dev`, `ENABLE_LOCAL_RUNTIME=true`. Keep `.env` private; it is Git-ignored. The application MySQL user must **not** have CREATE/ALTER/DROP grants. Keep the audit table in **a separate database** so the user cannot update or delete audit events even with UPDATE/DELETE granted on business tables. For an existing development installation, apply only `runtime/audit.mysql.sql` after creating the audit database and granting INSERT/SELECT; do not reapply the sample business schema. Audit events capture metadata, not submitted form values.
 
-In the editor, choose **New customer**, switch to **Preview → MySQL (local)**, fill name/email and click the button bound to the sample workflow. Existing Update/Delete buttons retain their direct legacy behaviour. The published server metadata controls the allowlisted tables, fields, pages and workflows.
+Sign in with your local account in the blue strip at the top of the editor. Then choose **New customer**, switch to **Preview → MySQL (local)**, fill name/email and click the button bound to the sample workflow. Existing Update/Delete buttons retain their direct legacy behaviour. The published server metadata controls the allowlisted tables, fields, pages and workflows.
 
 **Existing v0.3 installations:** workflow metadata itself requires **no SQL table migration**. However, the editor's schema changed from v2 to v3, so republish your project after exporting the migrated JSON, then restart the server. Do **not** apply the example `CREATE TABLE`/foreign key SQL over an existing database without a reviewed migration and backup.
 
@@ -99,11 +134,13 @@ src/lib/studio/workflow.js      workflow definitions, graph integrity, interpret
 src/lib/studio/records.js       shared field validation and parameterised CRUD SQL
 src/lib/studio/compiler.js      UI-only Svelte markup and reviewable MySQL DDL exporters
 src/lib/studio/revision.js      published metadata consistency fingerprint
-src/lib/server/runtime/        loopback gate, MySQL driver, CRUD store, transactional workflow engine
+src/lib/server/runtime/        loopback gate, local auth/session/RBAC, append-only audit, transactional workflows
 src/routes/+page.svelte         complete page/data/workflow builder and preview interactions
-src/routes/api/runtime/        development-only published-project, CRUD and workflow endpoints
+src/routes/api/runtime/        authenticated local project, CRUD, workflow, sign-in and audit endpoints
 runtime/project.json           published customer workspace with sample visual workflow
-runtime/schema.mysql.sql       example development schema, NOT a migration
+runtime/schema.mysql.sql       example business schema, NOT a migration
+runtime/audit.mysql.sql        separate append-only audit table migration
+scripts/local-user.mjs        creates/updates a local user using a scrypt password hash
 scripts/publish-project.mjs    local snapshot publisher (validates but never runs SQL)
 preview/workflows.html         self-contained dependency-free interactive workflow demo
 scripts/build-workflow-preview.mjs  regenerates both standalone demo entrypoints
@@ -112,11 +149,11 @@ tests/                         model, records, workflow and security-invariant t
 .github/workflows/ci.yml       PR and main test/check/build validation
 ```
 
-Workflow steps are declarative JSON. The interpreter never evaluates user-authored JavaScript or accepts arbitrary SQL. Server CRUD checks origin for writes, published model and project revision consistency, validates field types and field names, and parameterises values. The revision header is **not authentication**. In **MySQL mode**, workflow branch decisions are made on the server using the published graph; offline-memory preview remains client-interpreted. Server-side MySQL workflow actions now share one transaction: failed steps roll back earlier writes. Direct one-step CRUD buttons remain available. The demo workflow that runs without MySQL is a browser-only simulation.
+Workflow steps are declarative JSON. The interpreter never evaluates user-authored JavaScript or accepts arbitrary SQL. Server CRUD checks same-origin writes, published models and project revisions, validates types and field names, parameterises values and requires a local account with appropriate role. The revision header is **not authentication**. In MySQL mode, flow changes and branch decisions execute **on the server** against published metadata; the memory demo remains browser-interpreted. Server-side MySQL workflow actions now share one transaction: failed steps roll back earlier writes. Direct one-step CRUD buttons remain available. The demo workflow that runs without MySQL is a browser-only simulation.
 
 ## Verification
 
-- **35/35** dependency-free Node unit tests pass (plus one opt-in MySQL integration test): original designer/DDL, CRUD test doubles, v1/v2 migration, graph validation (including cycle/orphan prevention), conditions, sequential execution, failure propagation and revision integrity.
+- **44/44** dependency-free Node unit tests pass (plus one opt-in MySQL integration test): original designer/DDL, CRUD test doubles, v1/v2 migration, graph validation (including cycle/orphan prevention), conditions, sequential execution, failure propagation and revision integrity.
 - Workflow demo has been exercised in Chromium using both true/false paths, memory record creation and connected step insertion. The demo does not perform live database requests.
 - `node --check` passes for all standalone JavaScript modules and the extracted page `<script>`.
 - Local `npm install` could not reach `registry.npmjs.org` (`EAI_AGAIN`). GitHub Actions validates dependency installation, the real MySQL transaction test, `npm run check` and the production build. Run the commands on your Mac to validate your own database instance.
@@ -124,4 +161,4 @@ Workflow steps are declarative JSON. The interpreter never evaluates user-author
 
 ## Next engineering work
 
-Production authentication, role/permission policies for workflow actions, persistent audit logging and idempotent submission safeguards; then versioned application publishing, richer expressions/variables, and hosted application packaging. **Do not expose the development runtime to the network.** This prototype must remain on loopback; never expose the dev runtime through a public tunnel, reverse proxy or LAN binding, and do not store actual customer data in it.
+Production-grade identity federation, multi-user/team project administration, role and permission policies per resource, durable cross-process sessions, audit retention/tamper detection, idempotent submissions, and service-level observability; then versioned application publishing, richer expressions/variables, and hosted packaging. **Do not expose the development runtime to the network.** This prototype must remain on loopback; never expose the dev runtime through a public tunnel, reverse proxy or LAN binding, and do not store actual customer data in it.
