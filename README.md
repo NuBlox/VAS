@@ -1,3 +1,11 @@
+# Visual Application Studio · Alpha 0.9 — Local Release Candidate Management
+
+Version 0.9 adds a verified **local-only release candidate store** for generated SvelteKit applications. After export and installation, `deploy:stage` verifies release identity, tests, Svelte analysis and build, then copies a source snapshot without secrets or dependencies. `deploy:promote` and `deploy:rollback` update a local activation manifest with integrity checks, immutable history and expected-current-release safeguards. See the generated application's `deployment/README.md` for exact commands. CI exercises the generated app's stage/promote/status lifecycle.
+
+**Scope:** These commands do not deploy software to a running host, update proxies, launch processes, manage production identity, or roll back database changes. Environments are `local` and `staging` on loopback only; production/public profiles are rejected. VAS and generated applications remain local development prototypes. SHA-256 validates content integrity but is not a cryptographic signature of publisher identity.
+
+---
+
 # Visual Application Studio · Alpha 0.8 — Standalone Application Export
 
 VAS now includes a **standalone SvelteKit application exporter**. The command `npm run app:export -- --out ~/Developer/CustomerWorkspace` generates an independent app without the Studio editor, including its page renderer, local authenticated MySQL CRUD and workflow APIs, release verification, database DDL, and a migration review plan. Existing v0.7 capabilities remain unchanged.

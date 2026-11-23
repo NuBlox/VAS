@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "environment": "staging",
+  "mode": "local-development",
+  "bindHost": "127.0.0.1"
+}

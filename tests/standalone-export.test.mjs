@@ -24,6 +24,10 @@ test('exports independent, verifiable SvelteKit application with runtime routes 
   assert.ok((await readFile(join(dest,'src/routes/api/runtime/workflows/[workflowId]/+server.js'),'utf8')).includes('executePublishedWorkflow'));
   await assert.rejects(access(join(dest,'src/routes/+page.svelte.nonexistent')));
   await assert.rejects(access(join(dest,'src/routes/+page.svelte.from-editor')));
+  assert.match((await readFile(join(dest,'scripts/deploy/core.mjs'),'utf8')),/promoteRelease/);
+  assert.equal((await readJSON(join(dest,'deployment/profiles/local.json'))).bindHost,'127.0.0.1');
+  const generatedPackage=await readJSON(join(dest,'package.json'));
+  assert.ok(generatedPackage.scripts['deploy:stage']);
   assert.equal(spawnSync(process.execPath,['scripts/verify-release.mjs'],{cwd:dest}).status,0);
   assert.equal(run(['--out',dest],dir).status,1,'must never overwrite existing export');
   const sql=await readFile(join(dest,'db/initial.mysql.sql'),'utf8');
