@@ -1,0 +1,569 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Visual Application Studio 0.4 · Workflow Designer</title><style>:root{font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#263950;background:#eff3fa}*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}.app{min-height:100vh}.header{height:74px;padding:0 25px;background:#fff;border-bottom:1px solid #dce5f1;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{display:flex;align-items:center;gap:11px}.brand strong{font-size:16px;display:block}.brand small{font-size:11px;color:#899ab0}.logo{display:grid;place-items:center;background:#2265de;color:white;border-radius:11px;width:36px;height:36px;font-size:24px}.header-actions{display:flex;gap:8px}.header button{border:1px solid #d8e2ef;border-radius:8px;background:#fff;padding:10px 12px;font-size:12px;color:#354b67;font-weight:600}.layout{display:grid;grid-template-columns:240px minmax(0,1fr) 252px;min-height:calc(100vh - 74px)}.left,.right{background:white;padding:22px 16px;border-right:1px solid #dce5ef}.right{border-right:0;border-left:1px solid #dce5ef}.section-label{font-size:10px;letter-spacing:1.2px;color:#97a5b9;font-weight:800;margin:12px 0 14px}.project-name{display:block;margin-bottom:25px;color:#354660;font-size:13px}.flow-link{border:0;width:100%;background:transparent;text-align:left;font-size:12px;line-height:1.35;border-radius:8px;color:#4d6584;padding:13px 10px;display:grid;gap:5px}.flow-link small{color:#8a9aaf}.flow-link.active{background:#e9f1ff;color:#1e57b7;font-weight:700}.helper{color:#92a2b7;font-size:12px;line-height:1.5}.left h3,.right h3{font-size:12px;color:#435876;margin:28px 0 13px}.left select{display:block;width:100%;padding:10px;border:1px solid #dce4ee;background:white;border-radius:8px;font-size:12px;margin:10px 0}.primary{background:#2569df;border:0;border-radius:8px;color:white;font-weight:700;padding:12px 14px;font-size:12px}.left .primary{width:100%;margin-top:8px}.main{min-width:0;padding:28px 30px 45px}.intro{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}.eyebrow{display:block;color:#5176b0;font-size:10px;font-weight:800;letter-spacing:1px}.intro h1{font-size:25px;line-height:1.2;margin:8px 0}.intro p,.preview-title p{font-size:12px;color:#8b9aae;line-height:1.5;margin:6px 0}.chip{padding:6px 11px;border:1px solid #b9cff2;background:#e8efff;color:#295dc0;border-radius:20px;font-size:11px;white-space:nowrap}.graph-outer{border-radius:12px;border:1px solid #dbe6f5;background-color:#fff;background-image:radial-gradient(#d6e2f3 1px,transparent 1px);background-size:20px 20px;overflow:auto;min-height:400px;max-height:600px}.graph-inner{position:relative;min-width:470px;min-height:370px}.graph-inner svg{position:absolute;inset:0;pointer-events:none}.graph-inner path{fill:none;stroke:#8ca8cd;stroke-width:2.5}.graph-inner path.true{stroke:#2dafa1}.graph-inner path.false{stroke:#ec898e}.graph-node{position:absolute;width:212px;min-height:98px;background:white;border:1px solid #cedbec;box-shadow:0 8px 22px #2b466519;padding:13px;border-radius:10px;text-align:left;display:flex;flex-direction:column;align-items:start;gap:8px;white-space:normal}.graph-node.conditional{border-left:4px solid #c08bce}.graph-node.selected{border-color:#2c70d8;box-shadow:0 0 0 3px #4286ec30,0 8px 22px #2b466529}.graph-node .eyebrow{font-size:9px}.graph-node strong{font-size:12px;line-height:1.3;color:#384b62;word-break:break-word;max-height:35px;overflow:hidden}.graph-node small{font-size:9px;color:#96a1af}.preview{background:white;border:1px solid #dce5f0;border-radius:12px;padding:23px;margin-top:23px}.preview-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.preview-title h2{font-size:19px;margin:7px 0}.preview-title .run{white-space:nowrap}.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:20px 0}.form-row label,.prop{font-size:12px;color:#536a84;font-weight:650;display:block}.form-row input,.prop input,.prop select{display:block;margin-top:8px;width:100%;padding:10px;border:1px solid #d6dfed;border-radius:7px;font-size:12px;color:#364c63}.right .prop{margin:16px 0}.right hr{border:0;border-top:1px solid #e8edf5;margin:25px 0}.node-kind{font-size:12px;color:#2a62cb;font-weight:800}.hint,.muted-small{font-size:11px;color:#92a0b3;line-height:1.6}.danger{border:1px solid #eacbd3;color:#b34a60;background:white;border-radius:7px;padding:11px;font-size:11px;font-weight:700;margin:12px 0}.danger:disabled{opacity:.4}.notice{border:1px solid #a8cee3;padding:12px;border-radius:7px;background:#edf7fb;color:#315d80;font-size:12px;margin:14px 0}.notice.error{border-color:#f0c1c6;color:#a4424d;background:#fff0f1}.trace{font-size:11px;color:#46739a}.preview h3{font-size:12px;margin:25px 0 11px}.table{overflow:auto}.table table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{border-bottom:1px solid #e9edf2;text-align:left;padding:10px}.table th{background:#f5f8fc;color:#667993}.table td{color:#5d6d81}@media(max-width:980px){.layout{grid-template-columns:190px minmax(0,1fr)}.right{grid-column:1/-1;border-top:1px solid #dce5ef;max-height:none}.main{padding:20px}}@media(max-width:620px){.header{height:auto;min-height:70px;flex-wrap:wrap;padding:13px;gap:8px}.brand strong{font-size:12px}.header-actions button{padding:8px;font-size:10px}.layout{display:block}.left{padding:14px}.left h3,.left .helper{display:none}.left select,.left .primary{max-width:50%;display:inline-block}.left .section-label{margin:8px 0}.right{padding:20px}.main{padding:18px}.intro h1{font-size:20px}.graph-outer{min-height:320px}.preview-title{flex-wrap:wrap}}
+</style></head><body><div id="app"></div><script>
+/** Declarative workflow graphs: no arbitrary scripting, expression evaluation or SQL. */
+const STEP_TYPES = [
+  {type:'condition',label:'Condition',hint:'Branch on a form field or selected record'},
+  {type:'create',label:'Create record',hint:'Save a new model record'},
+  {type:'update',label:'Update record',hint:'Update a selected model record'},
+  {type:'delete',label:'Delete record',hint:'Delete a selected model record'},
+  {type:'navigate',label:'Navigate',hint:'Open another application page'},
+  {type:'message',label:'Message',hint:'Show a message to the user'},
+  {type:'reset',label:'Reset form',hint:'Clear form fields and selection'},
+  {type:'set_field',label:'Set field',hint:'Assign a literal value to a form control'},
+  {type:'stop',label:'Stop',hint:'End this workflow'}
+];
+const OPERATORS = [
+  {value:'filled',label:'Is filled'},
+  {value:'empty',label:'Is empty'},
+  {value:'equals',label:'Equals'},
+  {value:'not_equals',label:'Does not equal'},
+  {value:'greater_than',label:'Greater than (number)'},
+  {value:'less_than',label:'Less than (number)'},
+  {value:'selected',label:'Record is selected'}
+];
+const types=new Set(STEP_TYPES.map(x=>x.type));
+const operators=new Set(OPERATORS.map(x=>x.value));
+const workflowPlain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const uniqueId=prefix=>`${prefix}_${typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`}`;
+function createStep(type='message',id=uniqueId('step'),options={}) {
+  if(!types.has(type))throw new Error(`Unsupported workflow step: ${type}`);
+  const data={
+    condition:{field:'',operator:'filled',value:'',modelId:'',trueId:'',falseId:''},
+    create:{modelId:'',nextId:''},update:{modelId:'',nextId:''},delete:{modelId:'',nextId:''},
+    navigate:{pageId:'',nextId:''},message:{text:'Workflow message',nextId:''},
+    reset:{nextId:''},set_field:{field:'',value:'',nextId:''},stop:{}
+  };
+  return {id,type,...data[type],...options};
+}
+function createWorkflow(pageId,componentId,name='New workflow',id=uniqueId('workflow')) {
+  const step=createStep('message');
+  return {id,name,trigger:{pageId,componentId,event:'click'},startStepId:step.id,steps:[step]};
+}
+function workflowForButton(project,pageId,componentId) {
+  return (project.workflows??[]).find(w=>w.trigger.pageId===pageId&&w.trigger.componentId===componentId);
+}
+function stepTargets(step) {return step.type==='condition'?[step.trueId,step.falseId].filter(Boolean):step.type==='stop'?[]:step.nextId?[step.nextId]:[];}
+/** Strict graph integrity and references. Each step is reachable and workflows are acyclic. */
+function validateWorkflows(project,walkNodes) {
+  if(!Array.isArray(project.workflows)||project.workflows.length>100)throw new Error('Invalid workflow collection (maximum 100)');
+  const workflowIds=new Set(),triggers=new Set();
+  const pages=new Map(project.pages.map(p=>[p.id,p]));
+  const models=new Set(project.models.map(m=>m.id));
+  for(const flow of project.workflows){
+    if(!workflowPlain(flow)||typeof flow.id!=='string'||!flow.id||flow.id.length>120||workflowIds.has(flow.id))throw new Error('Invalid or duplicate workflow ID');
+    workflowIds.add(flow.id);
+    if(typeof flow.name!=='string'||!flow.name.trim()||flow.name.length>120)throw new Error('Invalid workflow name');
+    if(!workflowPlain(flow.trigger)||flow.trigger.event!=='click'||typeof flow.trigger.pageId!=='string'||typeof flow.trigger.componentId!=='string')throw new Error('Workflow needs a button click trigger');
+    const sourcePage=pages.get(flow.trigger.pageId);
+    if(!sourcePage)throw new Error('Workflow trigger page does not exist');
+    const buttonIds=new Set(),fields=new Set();
+    walkNodes(sourcePage.components,node=>{if(node.type==='button')buttonIds.add(node.id);if(['input','textarea','checkbox','select'].includes(node.type))fields.add(node.props.field);});
+    if(!buttonIds.has(flow.trigger.componentId))throw new Error('Workflow trigger button is missing');
+    const key=`${flow.trigger.pageId}/${flow.trigger.componentId}`;
+    if(triggers.has(key))throw new Error('Only one workflow may be assigned to a button');
+    triggers.add(key);
+    if(!Array.isArray(flow.steps)||flow.steps.length<1||flow.steps.length>80)throw new Error('A workflow requires 1–80 steps');
+    if(typeof flow.startStepId!=='string'||!flow.startStepId)throw new Error('Workflow requires a starting step');
+    const byId=new Map();
+    const keys={condition:['id','type','field','operator','value','modelId','trueId','falseId'],create:['id','type','modelId','nextId'],update:['id','type','modelId','nextId'],delete:['id','type','modelId','nextId'],navigate:['id','type','pageId','nextId'],message:['id','type','text','nextId'],reset:['id','type','nextId'],set_field:['id','type','field','value','nextId'],stop:['id','type']};
+    for(const step of flow.steps) {
+      if(!workflowPlain(step)||typeof step.id!=='string'||!step.id||step.id.length>120||byId.has(step.id)||!types.has(step.type))throw new Error('Invalid or duplicate workflow step');
+      if(Object.keys(step).some(k=>!keys[step.type].includes(k))||keys[step.type].some(k=>!Object.hasOwn(step,k)))throw new Error('Invalid workflow step properties');
+      for(const [k,v] of Object.entries(step))if(typeof v!=='string'||v.length>(k==='text'?1000:200))throw new Error(`Invalid workflow property ${k}`);
+      if(['create','update','delete'].includes(step.type)&&!models.has(step.modelId))throw new Error('Workflow data step needs a valid model');
+      if(step.type==='navigate'&&!pages.has(step.pageId))throw new Error('Workflow navigation page is missing');
+      if(step.type==='message'&&!step.text.trim())throw new Error('Workflow message cannot be empty');
+      if(step.type==='set_field'&&!fields.has(step.field))throw new Error('Workflow set-field target is not a form control');
+      if(step.type==='condition') {
+        if(!operators.has(step.operator))throw new Error('Invalid workflow condition operator');
+        if(step.operator==='selected'){if(!models.has(step.modelId))throw new Error('Record selection condition needs a model');}
+        else if(!fields.has(step.field))throw new Error('Workflow condition must reference a form field');
+      }
+      byId.set(step.id,step);
+    }
+    if(!byId.has(flow.startStepId))throw new Error('Workflow starting step is missing');
+    for(const step of flow.steps)for(const id of stepTargets(step))if(!byId.has(id))throw new Error('Workflow connection targets a missing step');
+    const visiting=new Set(),visited=new Set();
+    function visit(id){
+      if(visiting.has(id))throw new Error('Workflow cycles are not supported');
+      if(visited.has(id))return;
+      visiting.add(id);
+      for(const target of stepTargets(byId.get(id)))visit(target);
+      visiting.delete(id);visited.add(id);
+    }
+    visit(flow.startStepId);
+    if(visited.size!==flow.steps.length)throw new Error('Workflow contains unreachable steps');
+  }
+}
+/** Insert a new step on a chosen exit, keeping any previous downstream branch. */
+function insertWorkflowStep(flow,step,afterId='',outcome='next') {
+  if(flow.steps.some(s=>s.id===step.id))throw new Error('Workflow step ID already exists');
+  if(!afterId)throw new Error('Select an existing workflow step first');
+  const parent=flow.steps.find(s=>s.id===afterId);
+  if(!parent||parent.type==='stop')throw new Error('Cannot add after the selected step');
+  const edge=parent.type==='condition'?(outcome==='false'?'falseId':'trueId'):'nextId';
+  const previous=parent[edge];
+  if(step.type==='condition')step.trueId=previous;
+  else if(step.type!=='stop')step.nextId=previous;
+  parent[edge]=step.id;flow.steps.push(step);
+}
+/** Delete a step and reconnect incoming edges to the single outgoing edge, if possible. */
+function removeWorkflowStep(flow,id) {
+  if(flow.steps.length===1)throw new Error('A workflow must contain at least one step');
+  const target=flow.steps.find(s=>s.id===id);
+  if(!target)throw new Error('Workflow step is missing');
+  const outgoing=[...new Set(stepTargets(target))];
+  if(outgoing.length>1)throw new Error('Reconnect the condition branches before deleting this step');
+  const next=outgoing[0]??'';
+  if(flow.startStepId===id)flow.startStepId=next;
+  for(const step of flow.steps){
+    for(const key of step.type==='condition'?['trueId','falseId']:step.type==='stop'?[]:['nextId'])if(step[key]===id)step[key]=next;
+  }
+  flow.steps=flow.steps.filter(s=>s.id!==id);
+}
+function conditionResult(step,context){
+  if(step.operator==='selected')return Boolean(context.selectedRecords?.[step.modelId]);
+  const raw=context.fields?.[step.field],text=String(raw??'');
+  if(step.operator==='filled')return raw!==null&&raw!==undefined&&text.trim()!==''&&raw!==false;
+  if(step.operator==='empty')return raw===null||raw===undefined||text.trim()===''||raw===false;
+  if(step.operator==='equals')return text===step.value;
+  if(step.operator==='not_equals')return text!==step.value;
+  const left=Number(raw),right=Number(step.value);
+  if(text.trim()===''||step.value.trim()===''||!Number.isFinite(left)||!Number.isFinite(right))return false;
+  return step.operator==='greater_than'?left>right:left<right;
+}
+/** Runs an already validated graph via explicit, caller-supplied capabilities. */
+async function executeWorkflow(flow,context,handlers,{maxSteps=80}={}) {
+  if(!Number.isInteger(maxSteps)||maxSteps<1||maxSteps>100)throw new Error('Invalid workflow step limit');
+  const nodes=new Map(flow.steps.map(s=>[s.id,s]));
+  const seen=new Set(),trace=[];let current=flow.startStepId;
+  while(current){
+    if(trace.length>=maxSteps)throw new Error('Workflow execution limit reached');
+    if(seen.has(current))throw new Error('Workflow cycle detected');
+    seen.add(current);
+    const step=nodes.get(current);if(!step)throw new Error('Workflow references a missing step');
+    trace.push({stepId:step.id,type:step.type});
+    if(step.type==='condition'){current=conditionResult(step,context)?step.trueId:step.falseId;continue;}
+    if(['create','update','delete'].includes(step.type))await handlers.data(step.type,step.modelId);
+    else if(step.type==='navigate')await handlers.navigate(step.pageId);
+    else if(step.type==='message')await handlers.message(step.text);
+    else if(step.type==='reset'){await handlers.reset();context.fields={};context.selectedRecords={};}
+    else if(step.type==='set_field'){await handlers.setField(step.field,step.value);context.fields={...context.fields,[step.field]:step.value};}
+    else if(step.type==='stop')break;
+    else throw new Error('Unsupported workflow step');
+    current=step.nextId;
+  }
+  return trace;
+}
+/** Layout for the browser's node-and-connector diagram (longest-path DAG ranks). */
+function workflowDiagram(flow) {
+  if(!flow)return {nodes:[],edges:[],width:400,height:180};
+  const byId=new Map(flow.steps.map(s=>[s.id,s])),depth=new Map([[flow.startStepId,0]]);
+  // Validated project graphs are acyclic; this handles malformed edit previews defensively.
+  for(let pass=0;pass<flow.steps.length;pass++){
+    let changed=false;
+    for(const step of flow.steps){if(!depth.has(step.id))continue;for(const child of stepTargets(step)){
+      const d=depth.get(step.id)+1;if(d>(depth.get(child)??-1)){depth.set(child,d);changed=true;}
+    }}
+    if(!changed)break;
+  }
+  const buckets=new Map();for(const step of flow.steps){const d=depth.get(step.id)??0;if(!buckets.has(d))buckets.set(d,[]);buckets.get(d).push(step);}
+  const nodes=[];for(const [d,steps] of [...buckets].sort((a,b)=>a[0]-b[0]))for(let row=0;row<steps.length;row++)nodes.push({...steps[row],x:28+d*262,y:30+row*160,rank:d});
+  const pos=new Map(nodes.map(s=>[s.id,s])),edges=[];
+  for(const step of nodes){for(const [key,id] of step.type==='condition'?[['true',step.trueId],['false',step.falseId]]:step.type==='stop'?[]:[['next',step.nextId]]){
+    if(!id||!pos.has(id))continue;
+    const to=pos.get(id),x1=step.x+212,y1=step.y+49,x2=to.x,y2=to.y+49,curve=Math.max(40,(x2-x1)/2);
+    edges.push({from:step.id,to:id,kind:key,path:`M ${x1} ${y1} C ${x1+curve} ${y1}, ${x2-curve} ${y2}, ${x2} ${y2}`});
+  }}
+  return {nodes,edges,width:Math.max(470,...nodes.map(n=>n.x+246)),height:Math.max(200,...nodes.map(n=>n.y+135))};
+}
+
+/** Safe, portable, metadata-first project definitions. Older projects migrate without data loss. */
+
+const SCHEMA_VERSION = 3;
+const FIELD_TYPES = ['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime'];
+const CONTAINER_TYPES = ['section', 'columns'];
+const COMPONENT_TYPES = ['heading','text','input','textarea','select','checkbox','button','card','divider','table',...CONTAINER_TYPES];
+const CATALOG = [
+  {type:'section',label:'Section',group:'Layout',icon:'▤'},
+  {type:'columns',label:'Two columns',group:'Layout',icon:'▥'},
+  {type:'heading',label:'Heading',group:'Content',icon:'H'},
+  {type:'text',label:'Text',group:'Content',icon:'¶'},
+  {type:'card',label:'Card',group:'Content',icon:'▣'},
+  {type:'divider',label:'Divider',group:'Content',icon:'—'},
+  {type:'input',label:'Text field',group:'Form controls',icon:'T'},
+  {type:'textarea',label:'Text area',group:'Form controls',icon:'☰'},
+  {type:'select',label:'Dropdown',group:'Form controls',icon:'▾'},
+  {type:'checkbox',label:'Checkbox',group:'Form controls',icon:'☑'},
+  {type:'button',label:'Button',group:'Actions',icon:'▰'},
+  {type:'table',label:'Data table',group:'Data display',icon:'▦'}
+];
+function createId(prefix='node') {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`;
+}
+function createComponent(type,id=createId('component')) {
+  const defaults = {
+    heading:{text:'New heading',level:2},text:{text:'Write some supporting text here.'},
+    input:{label:'Text field',field:'text_field',placeholder:'Enter a value',required:false,bindingModelId:'',bindingFieldId:''},
+    textarea:{label:'Your notes',field:'notes',placeholder:'Enter your notes',required:false,bindingModelId:'',bindingFieldId:''},
+    select:{label:'Choose an option',field:'choice',options:'First option\nSecond option\nThird option',required:false,bindingModelId:'',bindingFieldId:''},
+    checkbox:{label:'I agree',field:'agreed',required:false,bindingModelId:'',bindingFieldId:''},
+    button:{text:'Submit',variant:'primary',action:'submit',targetPageId:'',bindingModelId:''},
+    card:{title:'Card title',body:'A useful card with supporting content.'},divider:{},
+    table:{title:'Recent records',columns:'name,email',bindingModelId:''},
+    section:{title:'Section',tone:'plain'},columns:{title:'Columns',tone:'plain'}
+  };
+  if (!Object.hasOwn(defaults,type)) throw new Error(`Unknown component: ${type}`);
+  const node={id,type,props:{...defaults[type]}};
+  if (CONTAINER_TYPES.includes(type)) node.children=[];
+  return node;
+}
+function createField(name='new_field',type='string',id=createId('field')) {
+  return {id,name,type,required:false,unique:false,primary:false,referenceModelId:'',referenceFieldId:''};
+}
+function createModel(name='New Model',table='new_model',id=createId('model')) {
+  return {id,name,table,fields:[{...createField('id','integer'),required:true,unique:true,primary:true},createField('name','string')]};
+}
+function createProject() {
+  // Stable example IDs avoid Svelte SSR/client hydration differences.
+  // Newly added components/models/pages still receive fresh IDs from createId().
+  const dashboard='page_dashboard',customers='page_new_customer';
+  const customer=createModel('Customer','customers','model_customer');
+  customer.fields[0].id='field_customer_id';
+  customer.fields[1].id='field_customer_name';
+  customer.fields[1].required=true;
+  customer.fields.push({...createField('email','string','field_customer_email'),required:true,unique:true});
+  const order=createModel('Order','orders','model_order');
+  order.fields[0].id='field_order_id';
+  order.fields[1].id='field_order_name';
+  order.fields.push({...createField('customer_id','integer','field_order_customer_id'),required:true,referenceModelId:customer.id,referenceFieldId:customer.fields[0].id});
+  order.fields.push({...createField('amount','decimal','field_order_amount'),required:true});
+  const section=createComponent('section','component_intro_section');section.props.title='Getting started';
+  section.children=[createComponent('text','component_intro_text'),createComponent('card','component_intro_card')];
+  section.children[0].props.text='Select components in the tree, or open Data models to design your tables and relationships.';
+  const flow={id:'workflow_create_customer',name:'Validate and create customer',trigger:{pageId:customers,componentId:'component_form_save',event:'click'},startStepId:'step_check_name',steps:[
+    createStep('condition','step_check_name',{field:'name',operator:'filled',value:'',modelId:'',trueId:'step_create_customer',falseId:'step_name_required'}),
+    createStep('create','step_create_customer',{modelId:customer.id,nextId:'step_customer_created'}),
+    createStep('message','step_customer_created',{text:'Customer saved successfully.',nextId:''}),
+    createStep('message','step_name_required',{text:'Please enter the customer name.',nextId:''})
+  ]};
+  return {schemaVersion:SCHEMA_VERSION,id:'app_starter',name:'Customer Workspace',models:[customer,order],workflows:[flow],pages:[
+    {id:dashboard,name:'Overview',path:'/',components:[
+      {...createComponent('heading','component_overview_heading'),props:{text:'Customer Workspace',level:1}},section,
+      {...createComponent('button','component_overview_navigate'),props:{text:'Create a customer',variant:'primary',action:'navigate',targetPageId:customers,bindingModelId:''}}
+    ]},
+    {id:customers,name:'New customer',path:'/customers/new',components:[
+      {...createComponent('heading','component_form_heading'),props:{text:'New customer',level:1}},
+      {...createComponent('text','component_form_text'),props:{text:'Capture a new customer using this example form.'}},
+      {...createComponent('input','component_form_name'),props:{label:'Full name',field:'name',placeholder:'e.g. Alex Morgan',required:true,bindingModelId:customer.id,bindingFieldId:customer.fields[1].id}},
+      {...createComponent('input','component_form_email'),props:{label:'Email address',field:'email',placeholder:'alex@example.com',required:true,bindingModelId:customer.id,bindingFieldId:customer.fields[2].id}},
+      {...createComponent('button','component_form_save'),props:{text:'Save customer',variant:'primary',action:'submit',targetPageId:'',bindingModelId:customer.id}}
+    ]}
+  ]};
+}
+function cloneProject(data) { return JSON.parse(JSON.stringify(data)); }
+/** v1 and v2 projects preserve IDs, models and page content. No inferred workflows. */
+function migrateProject(source) {
+  if (!source || typeof source!=='object' || Array.isArray(source)) throw new Error('Project must be an object');
+  if (source.schemaVersion===SCHEMA_VERSION) return source;
+  if (source.schemaVersion===2) return {...cloneProject(source),schemaVersion:SCHEMA_VERSION,workflows:[]};
+  if (source.schemaVersion===1) return {...cloneProject(source),schemaVersion:SCHEMA_VERSION,models:[],workflows:[]};
+  throw new Error(`Unsupported schema version: ${String(source.schemaVersion)}`);
+}
+function walkNodes(nodes,visit,parentId='',depth=0) {
+  for(const node of nodes) {visit(node,parentId,depth);if(Array.isArray(node.children))walkNodes(node.children,visit,node.id,depth+1);}
+}
+function findNodeLocation(page,id) {
+  function search(nodes,parentId='',depth=0) {
+    for(let i=0;i<nodes.length;i++) {
+      if(nodes[i].id===id) return {node:nodes[i],nodes,index:i,parentId,depth};
+      if(nodes[i].children) {const found=search(nodes[i].children,nodes[i].id,depth+1);if(found)return found;}
+    }
+    return null;
+  }
+  return search(page.components);
+}
+function insertNode(page,node,parentId='',index) {
+  const parent=parentId ? findNodeLocation(page,parentId)?.node : null;
+  if (parentId && (!parent || !CONTAINER_TYPES.includes(parent.type))) throw new Error('Destination is not a container');
+  const nodes=parent ? parent.children : page.components;
+  const at=index===undefined ? nodes.length : index;
+  if(!Number.isInteger(at)||at<0||at>nodes.length)throw new Error('Invalid insertion index');
+  nodes.splice(at,0,node);
+}
+function moveNode(page,id,toParentId='',toIndex) {
+  const from=findNodeLocation(page,id);
+  if(!from)throw new Error('Missing component');
+  if(toParentId===id)throw new Error('Cannot nest a component inside itself');
+  let descendant=false;
+  walkNodes([from.node],n=>{if(n.id===toParentId)descendant=true;});
+  if(descendant)throw new Error('Cannot create a container cycle');
+  const parent=toParentId?findNodeLocation(page,toParentId)?.node:null;
+  if(toParentId && (!parent || !CONTAINER_TYPES.includes(parent.type)))throw new Error('Destination is not a container');
+  const target=parent?parent.children:page.components;
+  const to=toIndex===undefined?target.length:toIndex;
+  if(!Number.isInteger(to)||to<0||to>target.length)throw new Error('Invalid move index');
+  from.nodes.splice(from.index,1);
+  target.splice(target===from.nodes && to>from.index?to-1:to,0,from.node);
+}
+function removeNode(page,id) {
+  const found=findNodeLocation(page,id);if(!found)return false;
+  found.nodes.splice(found.index,1);return true;
+}
+function duplicateNode(node) {
+  const copy=cloneProject(node);
+  walkNodes([copy],n=>{n.id=createId('component');});
+  return copy;
+}
+function moveComponent(components,fromIndex,toIndex) {
+  if(!Number.isInteger(fromIndex)||!Number.isInteger(toIndex)||fromIndex<0||fromIndex>=components.length||toIndex<0||toIndex>components.length)throw new Error('Invalid move indices');
+  const copy=components.slice();const [item]=copy.splice(fromIndex,1);
+  copy.splice(fromIndex<toIndex?toIndex-1:toIndex,0,item);return copy;
+}
+const plain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const identifier=/^[a-z][a-z0-9_]{0,63}$/;
+function validateProject(project) {
+  if(!plain(project))throw new Error('Project must be a JSON object');
+  if(project.schemaVersion!==SCHEMA_VERSION)throw new Error(`Unsupported schema version: ${String(project.schemaVersion)}`);
+  if(typeof project.name!=='string'||!project.name||project.name.length>120)throw new Error('Invalid project name');
+  if(typeof project.id!=='string'||!project.id||project.id.length>120)throw new Error('Invalid project ID');
+  if(!Array.isArray(project.pages)||!project.pages.length||project.pages.length>100)throw new Error('Project must have 1–100 pages');
+  if(!Array.isArray(project.models)||project.models.length>100)throw new Error('Invalid model collection');
+  const modelIds=new Set(),tables=new Set(),modelLookup=new Map();
+  for(const model of project.models) {
+    if(!plain(model)||typeof model.id!=='string'||!model.id||modelIds.has(model.id))throw new Error('Invalid or duplicate model ID');
+    modelIds.add(model.id);modelLookup.set(model.id,model);
+    if(typeof model.name!=='string'||!model.name||model.name.length>120)throw new Error('Invalid model name');
+    if(typeof model.table!=='string'||!identifier.test(model.table)||tables.has(model.table))throw new Error('Invalid or duplicate SQL table name');
+    tables.add(model.table);
+    if(!Array.isArray(model.fields)||model.fields.length<1||model.fields.length>100)throw new Error('A model needs 1–100 fields');
+    const names=new Set(),ids=new Set();let primaryCount=0;
+    for(const field of model.fields) {
+      if(!plain(field)||typeof field.id!=='string'||!field.id||ids.has(field.id)||typeof field.name!=='string'||!identifier.test(field.name)||names.has(field.name))throw new Error('Invalid or duplicate field');
+      ids.add(field.id);names.add(field.name);
+      if(!FIELD_TYPES.includes(field.type)||typeof field.required!=='boolean'||typeof field.unique!=='boolean'||typeof field.primary!=='boolean')throw new Error('Invalid field definition');
+      if(typeof field.referenceModelId!=='string'||typeof field.referenceFieldId!=='string')throw new Error('Invalid relation definition');
+      if(field.type==='text'&&(field.unique||field.primary))throw new Error('TEXT fields cannot be unique or primary without an index prefix');
+      if(field.primary){primaryCount++;if(!field.required)throw new Error('Primary field must be required');}
+    }
+    if(primaryCount!==1)throw new Error('Each model requires one primary field');
+  }
+  for(const model of project.models)for(const field of model.fields){
+    if(!field.referenceModelId&&!field.referenceFieldId)continue;
+    const target=modelLookup.get(field.referenceModelId)?.fields.find(f=>f.id===field.referenceFieldId);
+    if(!target||!target.primary||field.type!==target.type)throw new Error('Invalid relationship reference or incompatible types');
+  }
+  const pageIds=new Set(),componentIds=new Set();
+  for(const page of project.pages) {
+    if(!plain(page)||typeof page.id!=='string'||!page.id||pageIds.has(page.id))throw new Error('Invalid or duplicate page ID');
+    pageIds.add(page.id);
+    if(typeof page.name!=='string'||!page.name||page.name.length>120||typeof page.path!=='string'||!page.path.startsWith('/')||page.path.length>255)throw new Error('Invalid page settings');
+    if(!Array.isArray(page.components))throw new Error('Invalid page components');
+    let count=0;
+    const check=(nodes,depth)=>{
+      if(depth>7)throw new Error('Maximum component nesting depth exceeded');
+      for(const c of nodes) {
+        count++;if(count>1000)throw new Error('A page may have up to 1000 components');
+        if(!plain(c)||typeof c.id!=='string'||!c.id||componentIds.has(c.id)||!COMPONENT_TYPES.includes(c.type)||!plain(c.props))throw new Error('Invalid or duplicate component');
+        componentIds.add(c.id);
+        for(const [key,value] of Object.entries(c.props))if(key.length>120||!['string','number','boolean'].includes(typeof value)||(typeof value==='string'&&value.length>10000))throw new Error(`Invalid property: ${key}`);
+        if(CONTAINER_TYPES.includes(c.type)) {if(!Array.isArray(c.children))throw new Error('Container needs a children array');check(c.children,depth+1);}
+        else if(c.children!==undefined)throw new Error('Leaf components cannot contain children');
+        if(c.props.bindingModelId||c.props.bindingFieldId){
+          const model=modelLookup.get(c.props.bindingModelId);
+          if(!model||(['input','textarea','select','checkbox'].includes(c.type)&&!model.fields.some(f=>f.id===c.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingFieldId))throw new Error('Broken field binding');
+        }
+        if(c.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(c.props.action))throw new Error('Invalid button action');
+      }
+    };check(page.components,0);
+  }
+  validateWorkflows(project,walkNodes);
+  return project;
+}
+
+/** Shared, deterministic validation for model-bound records. No dynamic code execution. */
+class RecordError extends Error {
+  constructor(message, status=400) { super(message); this.name='RecordError'; this.status=status; }
+}
+const recordsPlain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const utf8Bytes = value => new TextEncoder().encode(value).length;
+function validDate(text) {
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(text))return false;
+  const [y,m,d]=text.split('-').map(Number);
+  if(y<1000||y>9999||m<1||m>12||d<1||d>31)return false;
+  const actual=new Date(Date.UTC(y,m-1,d));
+  return actual.getUTCFullYear()===y&&actual.getUTCMonth()+1===m&&actual.getUTCDate()===d;
+}
+function normaliseValue(field,value) {
+  if(value===null||value===undefined||value==='') {
+    if(field.required||field.primary)throw new RecordError(`${field.name} is required`);
+    return null;
+  }
+  switch(field.type) {
+    case 'string':case 'text':{
+      if(typeof value!=='string')throw new RecordError(`${field.name} must be text`);
+      if(field.required&&!value.trim())throw new RecordError(`${field.name} is required`);
+      if(utf8Bytes(value)>(field.type==='string'?255:65535))throw new RecordError(`${field.name} is too long`);
+      return value;
+    }
+    case 'integer':{
+      if(!((typeof value==='string'&&value.length<=20&&/^(0|[1-9]\d*)$/.test(value))||(typeof value==='number'&&Number.isSafeInteger(value)&&value>=0)))throw new RecordError(`${field.name} must be a non-negative integer`);
+      const n=BigInt(value);
+      if(n>18446744073709551615n)throw new RecordError(`${field.name} exceeds BIGINT UNSIGNED`);
+      return n.toString();
+    }
+    case 'decimal':{
+      if(!(typeof value==='string'||typeof value==='number')||!(/^-?\d{1,14}(?:\.\d{1,4})?$/.test(String(value))))throw new RecordError(`${field.name} requires DECIMAL(18,4)`);
+      return String(value);
+    }
+    case 'boolean':{
+      if(typeof value!=='boolean')throw new RecordError(`${field.name} must be true or false`);
+      return value?1:0;
+    }
+    case 'date':{
+      if(typeof value!=='string'||!validDate(value))throw new RecordError(`${field.name} requires YYYY-MM-DD`);
+      return value;
+    }
+    case 'datetime':{
+      if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/.test(value))throw new RecordError(`${field.name} requires a local date/time`);
+      const clean=value.replace('T',' '),[date,time]=clean.split(' ');
+      if(!validDate(date))throw new RecordError(`${field.name} has an invalid date`);
+      const [h,m,s='0']=time.split(':');
+      if(+h>23||+m>59||+s.split('.')[0]>59)throw new RecordError(`${field.name} has an invalid time`);
+      return clean;
+    }
+    default:throw new RecordError('Unsupported field type');
+  }
+}
+function primaryField(model){const pk=model.fields.find(field=>field.primary);if(!pk)throw new RecordError('Missing model primary key');return pk;}
+function normaliseId(model,raw) { return normaliseValue(primaryField(model),raw); }
+function validateRecord(model,payload,operation='create') {
+  if(!recordsPlain(payload))throw new RecordError('Expected a JSON object');
+  if(!['create','update'].includes(operation))throw new RecordError('Unknown operation');
+  const pk=primaryField(model),byName=new Map(model.fields.map(f=>[f.name,f]));
+  const output={};
+  for(const [name,value] of Object.entries(payload)){
+    const field=byName.get(name);
+    if(!field||field.primary)throw new RecordError(`Field ${name} is not writable`);
+    output[name]=normaliseValue(field,value);
+  }
+  if(operation==='create')for(const field of model.fields){
+    if(!field.primary&&field.required&&!Object.hasOwn(output,field.name))throw new RecordError(`${field.name} is required`);
+  }
+  if(operation==='update'&&!Object.keys(output).length)throw new RecordError('No fields supplied for update');
+  if(operation==='create'&&pk.type!=='integer')throw new RecordError('This version requires an integer auto-generated primary key');
+  return output;
+}
+function quoteIdentifier(name) {
+  if(typeof name!=='string'||!/^[a-z][a-z0-9_]{0,63}$/.test(name))throw new RecordError('Invalid SQL identifier');
+  return '`'+name+'`';
+}
+/** Generates allowlisted, parameterised statements from a validated published model. */
+function sqlFor(model,operation,data={},id) {
+  const table=quoteIdentifier(model.table),pk=quoteIdentifier(primaryField(model).name);
+  if(operation==='list')return {sql:`SELECT * FROM ${table} ORDER BY ${pk} DESC LIMIT 50`,params:[]};
+  if(operation==='get')return {sql:`SELECT * FROM ${table} WHERE ${pk} = ? LIMIT 1`,params:[normaliseId(model,id)]};
+  if(operation==='delete')return {sql:`DELETE FROM ${table} WHERE ${pk} = ? LIMIT 1`,params:[normaliseId(model,id)]};
+  if(operation==='create'||operation==='update') {
+    const checked=validateRecord(model,data,operation),keys=Object.keys(checked),params=keys.map(k=>checked[k]);
+    if(operation==='create')return keys.length?{sql:`INSERT INTO ${table} (${keys.map(quoteIdentifier).join(', ')}) VALUES (${keys.map(()=>'?').join(', ')})`,params}:{sql:`INSERT INTO ${table} () VALUES ()`,params:[]};
+    return {sql:`UPDATE ${table} SET ${keys.map(k=>`${quoteIdentifier(k)} = ?`).join(', ')} WHERE ${pk} = ? LIMIT 1`,params:[...params,normaliseId(model,id)]};
+  }
+  throw new RecordError('Unsupported record operation');
+}
+function jsonRecord(record) {
+  if(!record)return null;
+  return Object.fromEntries(Object.entries(record).map(([key,value])=>[key,typeof value==='bigint'?value.toString():value instanceof Date?value.toISOString():value]));
+}
+
+// Browser-only interactive workflow sandbox. Uses the same model and engine as SvelteKit.
+const escape=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+const E=escape;
+const KEY='visual-application-studio-v04-workflow-demo';
+let project=createProject(),flowId=project.workflows[0].id,stepId=project.workflows[0].startStepId;
+let formValues={name:'Ada Lovelace',email:'ada@example.com'},records=[],trace=[],notice='',noticeError=false,insertType='message',branch='true';
+try{const saved=localStorage.getItem(KEY);if(saved){project=validateProject(migrateProject(JSON.parse(saved)));flowId=project.workflows[0]?.id||'';stepId=project.workflows[0]?.startStepId||'';}}catch(err){notice=err.message;}
+const activeFlow=()=>project.workflows.find(w=>w.id===flowId);
+const activeStep=()=>activeFlow()?.steps.find(s=>s.id===stepId);
+const sourcePage=()=>project.pages.find(p=>p.id===activeFlow()?.trigger.pageId);
+function availableFields(){const fields=[];if(sourcePage())walkNodes(sourcePage().components,c=>{if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.field&&!fields.includes(c.props.field))fields.push(c.props.field);});return fields;}
+function mutation(fn){try{const copy=cloneProject(project);fn(copy);validateProject(copy);project=copy;try{localStorage.setItem(KEY,JSON.stringify(copy));}catch{}notice='Saved';noticeError=false;return true;}catch(e){notice=e.message;noticeError=true;return false;}finally{queueMicrotask(render);}}
+function addStep(type){const flow=activeFlow(),after=activeStep();if(!flow||!after)return;
+  const values={};
+  if(['condition','set_field'].includes(type)){if(!availableFields().length){notice='Add a form field to the trigger page first';noticeError=true;render();return;}values.field=availableFields()[0];}
+  if(['create','update','delete'].includes(type)){if(!project.models.length){notice='Add a data model first';noticeError=true;render();return;}values.modelId=project.models[0].id;}
+  if(type==='navigate')values.pageId=project.pages[0].id;
+  const created=createStep(type,undefined,values);
+  if(mutation(p=>insertWorkflowStep(p.workflows.find(w=>w.id===flowId),created,stepId,branch)))stepId=created.id;
+  render();
+}
+function summary(step){
+  if(step.type==='condition')return step.operator==='selected'?`Selected record in ${project.models.find(m=>m.id===step.modelId)?.name||'model'}`:`${step.field} ${OPERATORS.find(o=>o.value===step.operator)?.label.toLowerCase()||''}${['equals','not_equals','greater_than','less_than'].includes(step.operator)?' '+step.value:''}`;
+  if(['create','update','delete'].includes(step.type))return project.models.find(m=>m.id===step.modelId)?.name||'Data model';
+  if(step.type==='navigate')return project.pages.find(p=>p.id===step.pageId)?.name||'Page';
+  if(step.type==='message')return step.text;
+  if(step.type==='set_field')return `${step.field}: ${step.value}`;
+  return step.type==='reset'?'Clear form':'End workflow';
+}
+function options(items,selected){return items.map(([id,text])=>`<option value="${E(id)}" ${selected===id?'selected':''}>${E(text)}</option>`).join('');}
+function property(key,label,value,items){return `<label class="prop">${label}${items?`<select data-prop="${key}">${options(items,value)}</select>`:`<input data-prop="${key}" value="${E(value)}" />`}</label>`;}
+function inspector(){const f=activeFlow(),s=activeStep();if(!f||!s)return '<p>Select a workflow and a node.</p>';
+  const labels=STEP_TYPES.map(x=>[x.type,x.label]);
+  let html=`<h3>Workflow</h3>${property('flowName','Name',f.name)}<p class="muted-small">Click trigger: <strong>${E(project.pages.find(pg=>pg.id===f.trigger.pageId)?.name||'Page')}</strong></p><hr><h3>Selected step</h3><p class="node-kind">${E(STEP_TYPES.find(x=>x.type===s.type)?.label||s.type)}</p>`;
+  if(s.type==='condition'){
+    html+=property('operator','Condition',s.operator,OPERATORS.map(x=>[x.value,x.label]));
+    if(s.operator==='selected')html+=property('modelId','Entity',s.modelId,project.models.map(m=>[m.id,m.name]));
+    else html+=property('field','Form field',s.field,availableFields().map(x=>[x,x]));
+    if(['equals','not_equals','greater_than','less_than'].includes(s.operator))html+=property('value','Compare against',s.value);
+  }else if(['create','update','delete'].includes(s.type))html+=property('modelId','Entity',s.modelId,project.models.map(m=>[m.id,m.name]));
+  else if(s.type==='navigate')html+=property('pageId','Destination',s.pageId,project.pages.map(pg=>[pg.id,pg.name]));
+  else if(s.type==='message')html+=property('text','Message',s.text);
+  else if(s.type==='set_field')html+=property('field','Field',s.field,availableFields().map(x=>[x,x]))+property('value','Literal value',s.value);
+  const steps=f.steps.filter(x=>x.id!==s.id).map(x=>[x.id,`${STEP_TYPES.find(t=>t.type===x.type)?.label||x.type} / ${x.id.slice(-5)}`]);
+  if(s.type==='condition')html+=property('trueId','When TRUE',s.trueId,[['','End workflow'],...steps])+property('falseId','When FALSE',s.falseId,[['','End workflow'],...steps]);
+  else if(s.type!=='stop')html+=property('nextId','Next step',s.nextId,[['','End workflow'],...steps]);
+  html+=`<button class="danger" data-delete ${f.steps.length<=1?'disabled':''}>Delete selected step</button><p class="hint">Cycles, orphaned steps and invalid references are rejected.</p>`;
+  return html;
+}
+function render(){const f=activeFlow(),layout=workflowDiagram(f),s=activeStep();
+ const svg=layout.edges.map(x=>`<path d="${E(x.path)}" class="${x.kind}" />`).join('');
+ const nodes=layout.nodes.map(x=>`<button class="graph-node ${x.id===stepId?'selected':''} ${x.type==='condition'?'conditional':''}" style="left:${x.x}px;top:${x.y}px" data-step="${E(x.id)}"><span class="eyebrow">${x.id===f.startStepId?'● Start · ':''}${E(STEP_TYPES.find(y=>y.type===x.type)?.label)}</span><strong>${E(summary(x))}</strong><small>${x.type==='condition'?`TRUE → ${x.trueId?'step':'end'} · FALSE → ${x.falseId?'step':'end'}`:x.type==='stop'?'End':x.nextId?'→ Next':'→ End'}</small></button>`).join('');
+ const inputs=availableFields().map(field=>`<label>${E(field)}<input data-field="${E(field)}" value="${E(formValues[field]??'')}" /></label>`).join('');
+ const model=project.models[0];const cols=model?.fields.filter(x=>!x.primary).map(x=>x.name)||[];
+ document.getElementById('app').innerHTML=`<div class="app"><header class="header"><div class="brand"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Alpha 0.4 · workflow designer · offline demo</small></div></div><div class="header-actions"><button data-download>Export JSON</button><button data-reset>Reset demo</button></div></header><div class="layout"><aside class="left"><div class="section-label">PROJECT</div><strong class="project-name">${E(project.name)}</strong><div class="section-label">WORKFLOWS</div>${project.workflows.map(x=>`<button data-flow="${E(x.id)}" class="flow-link ${flowId===x.id?'active':''}">◇ ${E(x.name)}<small>${x.steps.length} steps</small></button>`).join('')}<p class="helper">Click event → condition → data operation → message.</p><h3>Add action</h3><p class="helper">Select a node in the graph, then add a step immediately after it.</p><select id="step-type">${options(STEP_TYPES.map(x=>[x.type,x.label]),insertType)}</select>${s?.type==='condition'?`<select id="insert-branch">${options([['true','TRUE exit'],['false','FALSE exit']],branch)}</select>`:''}<button class="primary" data-add>+ Add connected step</button></aside><main class="main"><div class="intro"><div><span class="eyebrow">WORKFLOW CANVAS</span><h1>${E(f?.name||'No workflow')}</h1><p>Every card is an executable step. Green and red connectors indicate the two branches of a condition.</p></div><span class="chip">${f?.steps.length||0} nodes</span></div><div class="graph-outer"><div class="graph-inner" style="width:${layout.width}px;height:${layout.height}px"><svg width="${layout.width}" height="${layout.height}" aria-hidden="true">${svg}</svg>${nodes}</div></div><div class="preview"><div class="preview-title"><div><span class="eyebrow">INTERACTIVE TEST</span><h2>Run the workflow</h2><p>Memory-only simulation using the same validated workflow engine.</p></div><button class="primary run" data-run>▶ Run workflow</button></div><div class="form-row">${inputs}</div>${notice?`<div class="notice ${noticeError?'error':''}" role="status">${E(notice)}</div>`:''}${trace.length?`<p class="trace">Executed: ${trace.map(t=>E(t.type)).join(' → ')}</p>`:''}<h3>In-memory records</h3><div class="table"><table><thead><tr>${cols.map(c=>`<th>${E(c)}</th>`).join('')}</tr></thead><tbody>${records.length?records.map(r=>`<tr>${cols.map(c=>`<td>${E(r[c]??'')}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${cols.length}">No records yet</td></tr>`}</tbody></table></div></div></main><aside class="right">${inspector()}</aside></div></div>`;
+}
+async function run(){trace=[];notice='';noticeError=false;const flow=activeFlow(),pg=sourcePage();
+  try{
+    trace=await executeWorkflow(flow,{fields:{...formValues},selectedRecords:{}},{
+      data:async(op,modelId)=>{
+        if(op!=='create')throw new Error('Update and Delete need the local MySQL runtime. This demo is memory-only.');
+        const model=project.models.find(m=>m.id===modelId);const payload={};
+        walkNodes(pg.components,c=>{if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingModelId===modelId){const f=model.fields.find(x=>x.id===c.props.bindingFieldId);if(f&&!f.primary&&Object.hasOwn(formValues,c.props.field))payload[f.name]=formValues[c.props.field];}});
+        records.push(validateRecord(model,payload,'create'));
+      },
+      message:async text=>{notice=text;},
+      navigate:async id=>{notice=`Navigated to ${project.pages.find(p=>p.id===id)?.name||'page'}`;},
+      reset:async()=>{formValues={};},
+      setField:async(field,value)=>{formValues[field]=value;}
+    });
+  }catch(e){notice=`Workflow error: ${e.message}`;noticeError=true;}
+  render();
+}
+document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.step){stepId=t.dataset.step;render();return;}
+  if(t.dataset.flow){flowId=t.dataset.flow;stepId=activeFlow()?.startStepId||'';render();return;}
+  if(t.hasAttribute('data-run')){void run();return;}
+  if(t.hasAttribute('data-add')){addStep(insertType);return;}
+  if(t.hasAttribute('data-delete')){if(mutation(p=>removeWorkflowStep(p.workflows.find(w=>w.id===flowId),stepId)))stepId=activeFlow().startStepId;render();return;}
+  if(t.hasAttribute('data-download')){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(project,null,2)],{type:'application/json'}));a.href=u;a.download='application-workflows-v0.4.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);return;}
+  if(t.hasAttribute('data-reset')){try{localStorage.removeItem(KEY);}catch{}project=createProject();flowId=project.workflows[0].id;stepId=activeFlow().startStepId;records=[];trace=[];notice='Example restored';noticeError=false;render();}
+});
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='step-type'){insertType=t.value;return;}if(t.id==='insert-branch'){branch=t.value;return;}
+  if(t.dataset.prop){let value=t.value;mutation(p=>{const w=p.workflows.find(w=>w.id===flowId);if(t.dataset.prop==='flowName')w.name=value;else{const s=w.steps.find(s=>s.id===stepId);s[t.dataset.prop]=value;if(t.dataset.prop==='operator'&&value==='selected'&&!s.modelId)s.modelId=p.models[0]?.id||'';}});}
+  if(t.dataset.field){formValues[t.dataset.field]=t.value;}
+});
+document.addEventListener('input',e=>{if(e.target.dataset.field)formValues[e.target.dataset.field]=e.target.value;});
+render();
+
+</script></body></html>

@@ -1,0 +1,33 @@
+{
+  "name": "visual-application-studio",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+    "test": "node --test tests/*.test.mjs",
+    "runtime:publish": "node scripts/publish-project.mjs",
+    "preview:generate": "node scripts/build-workflow-preview.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^9.0.0",
+    "@sveltejs/kit": "^3.4.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.0.0",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "mysql2": "^3.15.0"
+  },
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
+  "engines": {
+    "node": ">=22.17.0"
+  }
+}

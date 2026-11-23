@@ -1,0 +1,410 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Visual Application Studio · Alpha 0.2</title><style>@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+:root {font-family:'DM Sans',ui-sans-serif,system-ui,sans-serif;color:#18243a;background:#f4f6fb;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.studio{height:100vh;min-height:700px;display:flex;flex-direction:column}.topbar{height:68px;flex:none;background:#fff;border-bottom:1px solid #e5e9f2;display:flex;align-items:center;padding:0 24px;gap:32px}.identity{display:flex;align-items:center;gap:11px;min-width:257px}.identity strong{font-family:Manrope,sans-serif;font-size:13px;letter-spacing:-.2px;display:block}.identity small{display:block;color:#8a94a8;font-size:10px;margin-top:3px}.logo{background:#3068e9;color:#fff;border-radius:10px;width:36px;height:36px;display:grid;place-items:center;font-size:25px}.project{display:flex;align-items:center;gap:9px}.status-dot{background:#39b88a;width:7px;height:7px;border-radius:50%}.project input{border:0;outline:none;font-weight:700;font-size:13px;color:#253047;min-width:160px;max-width:240px}.actions{margin-left:auto;display:flex;align-items:center;gap:7px}.actions button{background:#fff;border:1px solid #e4e9f2;color:#56627a;border-radius:8px;padding:8px 11px;font-weight:600;font-size:11px}.actions button:last-child{background:#2b63e5;border-color:#2b63e5;color:white}.actions button:hover:not(:disabled){border-color:#2b63e5}.hidden{display:none}.workspace{display:grid;grid-template-columns:254px minmax(0,1fr) 275px;flex:1;min-height:0}.sidebar{background:#fff;border-right:1px solid #e5e9f2;overflow:auto}.sidebar-head{display:flex;align-items:center;justify-content:space-between;margin:25px 20px 12px;color:#8b96a9;font-size:10px;font-weight:800;letter-spacing:1px}.sidebar-head button{height:25px;width:25px;border:1px solid #dde3ef;background:#fff;color:#3167e4;border-radius:7px;font-size:17px;line-height:1}.sidebar-head small{font-size:9px;color:#9aa6b7;letter-spacing:0;font-weight:500}.project-tree{padding:0 12px}.tree-title{font-weight:700;font-size:11px;color:#61708b;padding:9px 11px}.project-tree button{width:100%;text-align:left;border:0;border-radius:8px;background:transparent;font-size:12px;color:#64718b;padding:11px 14px;margin:2px 0;display:flex;align-items:center;gap:10px}.project-tree button.active{background:#edf3ff;color:#2759d2;font-weight:700}.toolbox-title{margin-top:28px}.toolbox{padding:0 12px 25px}.group-label{font-size:10px;font-weight:700;color:#6e7c96;margin:17px 9px 10px}.tool-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tool{display:flex;gap:8px;align-items:center;text-align:left;background:#fff;border:1px solid #e8ecf3;border-radius:8px;padding:11px 8px;color:#4e5d75;font-size:10px;font-weight:600;min-height:42px}.tool:hover{background:#f5f8ff;border-color:#9bb8f8}.tool-icon{width:19px;height:19px;display:grid;place-items:center;color:#386ad8;background:#ebf1ff;border-radius:4px;font-size:13px;flex:none}.workarea{display:flex;flex-direction:column;min-width:0}.canvasbar{height:65px;flex:none;background:#fff;border-bottom:1px solid #e6eaf1;display:flex;align-items:center;justify-content:space-between;padding:0 28px;gap:12px}.breadcrumbs{font-size:11px;color:#929bac;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.breadcrumbs b{color:#38465d}.breadcrumbs span{margin:0 8px}.breadcrumbs .path{background:#f1f5fa;border-radius:5px;padding:5px 7px;font-family:monospace;font-size:10px;color:#64748b}.canvas-tools{display:flex;gap:12px}.segment{border:1px solid #e1e7f1;background:#f6f8fc;border-radius:8px;display:flex;gap:2px;padding:3px}.segment button{border:0;background:transparent;padding:6px 11px;border-radius:6px;color:#8995a9;font-size:11px;font-weight:700;white-space:nowrap}.segment button.chosen{background:#fff;color:#3667d8;box-shadow:0 1px 5px #c9d3e15e}.canvas-scroll{flex:1;overflow:auto;padding:29px 30px 50px;display:flex;align-items:flex-start;justify-content:center;background:radial-gradient(circle,#e3e9f2 0.7px,transparent .7px);background-size:15px 15px}.page-shell{background:#fff;max-width:900px;width:100%;min-height:580px;border:1px solid #e0e7f0;border-radius:11px;box-shadow:0 14px 36px #202e4912;transition:width .2s}.page-shell.mobile{width:390px;flex:none}.page-heading{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #edf0f5;padding:22px 30px}.page-heading small{font-size:9px;letter-spacing:1.2px;font-weight:800;color:#a1abc0}.page-heading h2{font-family:Manrope,sans-serif;font-weight:800;color:#202e48;margin:4px 0 0;font-size:18px}.page-heading>span{font-size:9px;font-weight:800;letter-spacing:.8px;background:#f1f5fa;color:#8290a8;border-radius:4px;padding:7px 9px}.page-content{padding:32px 36px 60px}.component{position:relative;margin:0;padding:10px;border-radius:8px;min-height:24px;outline:1px solid transparent}.component.editable{cursor:grab}.component.editable:hover{outline:1px dashed #a7b9d8;background:#f9fbff}.component.selected{outline:2px solid #457bf4!important;background:#f7faff}.draghandle{position:absolute;right:8px;top:4px;font-size:15px;color:#8da8e8}.component h1,.component h2,.component h3,.component h4,.component p{margin:0}.component h1{font:800 31px/1.2 Manrope,sans-serif;letter-spacing:-.9px}.component h2{font:800 24px/1.25 Manrope,sans-serif}.component h3{font:800 16px/1.4 Manrope,sans-serif}.component h4{font:700 14px/1.4 Manrope,sans-serif}.component p{font-size:13px;line-height:1.65;color:#65728a}.render-card{border:1px solid #e6ebf3;border-radius:9px;background:#fbfcff;padding:22px;display:grid;gap:7px}.render-card h3{font-size:15px}.field-label{display:block;font-weight:700;font-size:11px;margin-bottom:8px;color:#34425b}.field-label em{font-style:normal;color:#ea6067}.form-input{width:100%;border:1px solid #dce3ee;background:#fff;border-radius:7px;padding:12px;color:#303d57;font-size:12px;outline:none}.form-input:focus{border-color:#4076ee}.form-input:disabled{background:#fff;opacity:1}.checkline{display:flex;align-items:center;gap:9px;font-size:12px;color:#3e4b62}.render-button{background:#2f65e9;color:white;border:0;padding:12px 20px;border-radius:7px;font-weight:700;font-size:11px}.render-button.secondary{background:#e7edf9;color:#3359a1}.render-button:disabled{opacity:1}.component hr{border:0;border-top:1px solid #e6eaf1}.table-wrap{overflow:auto}.table-wrap h3{margin-bottom:12px}.table-wrap table{border-collapse:collapse;width:100%;font-size:11px}.table-wrap th,.table-wrap td{padding:12px;text-align:left;border-bottom:1px solid #e7ecf2}.table-wrap th{background:#f5f7fc}.muted{color:#95a0b2}.dropzone{height:7px;margin:2px 0}.dropzone:hover{height:26px;border:1px dashed #4682ed;background:#edf4ff}.dropzone.last{height:48px;border:1px dashed #d5dfef;display:grid;place-items:center;color:#9aa8bc;font-size:11px;margin:12px 10px}.dropzone.last:hover{border-color:#4682ed;background:#edf4ff}.feedback{margin:15px 10px;padding:13px;border:1px solid #a5bff2;border-radius:7px;background:#f2f6ff;color:#2f5298;font-size:11px;word-break:break-word}.statusbar{height:37px;flex:none;background:#fff;border-top:1px solid #e6ebf4;display:flex;justify-content:space-between;align-items:center;padding:0 20px;color:#8592a7;font-size:10px}.statusbar span:first-child{color:#579b84}.inspector{background:#fff;border-left:1px solid #e5e9f2;overflow:auto}.inspector-title{height:65px;border-bottom:1px solid #edf0f5;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-weight:800;color:#7a879c;letter-spacing:1.1px;font-size:10px}.inspect-icon{font-size:20px;color:#a0aabc}.inspect-body{padding:20px}.selected-info{display:flex;align-items:center;gap:10px;padding:6px 0 26px;border-bottom:1px solid #eef0f5}.selection-icon{background:#ecf2ff;border-radius:9px;color:#2b65dc;padding:10px;font-size:20px}.selected-info strong{display:block;font-size:13px}.selected-info small{color:#8996aa;font-size:10px}.section-label{font-size:10px;font-weight:800;letter-spacing:.8px;color:#8b97ac;margin:24px 0 17px}.property-label{font-size:11px;font-weight:700;color:#5a6880;display:block;margin-bottom:18px;text-transform:capitalize}.property-label input:not([type=checkbox]),.property-label textarea,.property-label select{display:block;width:100%;margin-top:8px;padding:10px;border:1px solid #e0e6ef;background:#fff;border-radius:7px;outline:none;color:#33415e;font-size:11px;font-weight:500;text-transform:none}.property-label input:focus,.property-label textarea:focus,.property-label select:focus{border-color:#3778e6}.property-label input[type=checkbox]{margin-left:12px}.inspector-buttons{display:flex;gap:9px}.inspector-buttons button,.page-delete{background:#fff;border:1px solid #dbe3ef;color:#54657d;padding:10px 12px;border-radius:7px;font-size:11px;font-weight:700}.inspector-buttons .danger,.page-delete{color:#c45367;border-color:#efd3d8}.hint{font-size:11px;line-height:1.65;color:#98a3b7;margin-top:20px}@media(max-width:1150px){.workspace{grid-template-columns:215px minmax(0,1fr) 230px}.canvasbar{padding:0 12px}.page-content{padding:20px 15px}.topbar{gap:12px;padding:0 12px}.identity{min-width:225px}}@media(max-width:900px){.workspace{grid-template-columns:190px minmax(0,1fr)}.inspector{display:none}.actions button{font-size:10px;padding:8px}.project{display:none}.page-shell{min-width:300px}}@media(max-width:620px){.studio{min-height:100vh}.topbar{flex-wrap:wrap;height:auto;padding:10px;gap:8px}.identity{min-width:0}.identity small{display:none}.actions{width:100%;justify-content:space-around}.workspace{display:flex;flex-direction:column;overflow:auto}.sidebar{max-height:185px;flex:none;border-bottom:1px solid #e5e9f2}.sidebar-head{margin:12px 12px 4px}.project-tree{display:flex;gap:4px}.tree-title{display:none}.project-tree button{width:auto}.toolbox-title{display:none}.toolbox{display:flex;gap:6px;overflow:auto;padding:5px 10px}.group-label{display:none}.tool-grid{display:flex;flex:none}.tool{white-space:nowrap;min-height:34px}.workarea{flex:1;min-height:450px}.canvasbar{height:55px}.breadcrumbs{display:none}.canvas-tools{margin:auto}.canvas-scroll{padding:15px}.page-shell.mobile{width:350px}.page-heading{padding:14px}.page-heading>span{display:none}}
+/* Milestone 0.2: tree, nested layout, and relational data modeller */
+.workspace-switch{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:16px 12px 0;padding:4px;border-radius:9px;background:#f2f5fa}
+.workspace-switch button{border:0;background:transparent;padding:10px 3px;font-size:11px;color:#71809a;border-radius:7px;font-weight:700}
+.workspace-switch button.active{background:white;color:#2b63e5;box-shadow:0 1px 4px #1e3a5f14}
+.component-tree{max-height:240px;overflow:auto;margin:0 10px;border:1px solid #e7edf7;border-radius:9px;padding:5px 3px;background:#fafcff}
+.tree-node{min-width:0}.tree-node button{width:100%;display:flex;align-items:center;text-align:left;gap:7px;background:transparent;border:0;padding:7px 8px;border-radius:5px;color:#61708b;font-size:11px}
+.tree-node button.active{background:#e8f0ff;color:#2358ce;font-weight:700}.tree-glyph{color:#396bdc}.tree-name{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;flex:1}.tree-count{font-size:9px;opacity:.6}
+.layout-box{border:1px dashed #bac9df;border-radius:10px;padding:12px;min-height:60px}.layout-muted{background:#f7f9fd}.layout-title{font-size:12px!important;color:#455a7f;margin:0 0 8px!important}
+.layout-children{display:grid;gap:1px}.layout-children.two-col{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;align-items:start}.layout-children .dropzone.last{grid-column:1/-1;margin:6px 0;height:32px}
+.layout-children .component{min-width:0}.layout-children.two-col .render-card{padding:12px}
+.data-scroll{justify-content:center}.data-workspace{max-width:1080px;width:100%;display:grid;gap:25px;padding:0 4px 45px}
+.data-intro{display:flex;justify-content:space-between;align-items:center;gap:10px}.data-intro small,.model-header small{font-size:9px;letter-spacing:1px;color:#9ba7bb;font-weight:800}.data-intro h2{margin:5px 0;font:800 23px Manrope,sans-serif;color:#233147}.data-intro p{font-size:12px;color:#8190a7;margin:0}.data-caption{font-size:10px;color:#94a2b9}
+.model-add{border:1px solid #bcd0f5;background:#eff4ff;color:#2a5fd3;border-radius:7px;padding:10px 13px;font-weight:700;font-size:11px;white-space:nowrap}.model-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:18px;align-items:start}
+.model-card{border:1px solid #dfe7f3;border-radius:13px;overflow:hidden;background:#fff;box-shadow:0 8px 25px #2030500c}.model-card.model-active{border-color:#5a8ded;box-shadow:0 0 0 2px #3172dc16}
+.model-header{border:0;border-bottom:1px solid #e8eef7;background:#f9fbff;padding:17px 19px;text-align:left;display:flex;justify-content:space-between;align-items:center;width:100%;color:#5978a5}.model-header div{display:grid;gap:5px}.model-header strong{font-size:15px;color:#28394f}.model-header code{font-size:10px;color:#8090a8;font-weight:500}.model-header>span{font-size:20px}.model-fields{padding:8px 0}.model-fields button{border:0;background:white;display:flex;width:100%;gap:8px;padding:10px 17px;justify-content:space-between;align-items:center;text-align:left;font-size:11px;color:#34455e}.model-fields button.field-active{background:#ecf3ff;color:#2159c7}.field-name{font-weight:700}.field-type{color:#9aa8b8;font-size:10px;white-space:nowrap}.model-footer{border-top:1px solid #edf1f7;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;font-size:10px;color:#95a2b8}.model-footer button{border:0;background:transparent;color:#3167df;font-weight:700;font-size:11px}
+.relationship-panel{border:1px solid #e1e9f5;background:white;border-radius:13px;padding:22px}.relationship-panel h3{font-size:13px;margin:0 0 14px;color:#2b3d59}.relation-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1f7;font:11px monospace;color:#49617d}.relation-row span:nth-child(2){color:#2770ee;font-size:18px}.relationship-panel p{color:#a0adbc;font-size:10px;margin:14px 0 0}
+.sidebar-note{padding:8px 19px;font-size:11px;color:#9aa7bb;line-height:1.6}.project-tree button small{font-size:9px;margin-left:auto;color:#9ba7b9}
+.empty-state{border:1px dashed #becdeb;border-radius:12px;padding:50px;text-align:center;font-size:13px;color:#7d90a9}.property-link{display:block;margin:14px 0;border:0;background:transparent;color:#356ad5;font-weight:700;font-size:11px}
+.actions button:last-child{background:#2464df;color:white}.inspector-buttons{margin-top:20px}
+@media(max-width:620px){.component-tree{max-height:85px}.data-intro{align-items:flex-start}.data-intro .render-button{white-space:nowrap}.layout-children.two-col{grid-template-columns:1fr}}
+/* Alpha 0.3 local-data preview controls */
+.runtime-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:12px 17px;border-bottom:1px solid #e5eaf3;background:#f8faff;font-size:12px;color:#56657b}
+.runtime-toolbar button{padding:7px 10px;background:white;border:1px solid #d8e1f1;border-radius:7px;font-weight:600;color:#3c4f66}
+.runtime-toolbar button.chosen{background:#3068e9;border-color:#3068e9;color:white}
+.runtime-toolbar .runtime-message{font-size:11px;color:#6b7790}
+.table-wrap{overflow-x:auto}
+.table-wrap table{width:100%;border-collapse:collapse}
+.table-wrap th,.table-wrap td{text-align:left;padding:10px;border-bottom:1px solid #e6ebf2;font-size:12px;vertical-align:middle}
+.row-select{border:1px solid #3068e9;color:#2053c4;background:#eaf0ff;padding:6px 10px;border-radius:6px;font-size:12px}
+</style></head><body><div id="app"></div><script>
+/** Safe, portable, metadata-first project definitions. Version 1 projects migrate without data loss. */
+const SCHEMA_VERSION = 2;
+const FIELD_TYPES = ['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime'];
+const CONTAINER_TYPES = ['section', 'columns'];
+const COMPONENT_TYPES = ['heading','text','input','textarea','select','checkbox','button','card','divider','table',...CONTAINER_TYPES];
+const CATALOG = [
+  {type:'section',label:'Section',group:'Layout',icon:'▤'},
+  {type:'columns',label:'Two columns',group:'Layout',icon:'▥'},
+  {type:'heading',label:'Heading',group:'Content',icon:'H'},
+  {type:'text',label:'Text',group:'Content',icon:'¶'},
+  {type:'card',label:'Card',group:'Content',icon:'▣'},
+  {type:'divider',label:'Divider',group:'Content',icon:'—'},
+  {type:'input',label:'Text field',group:'Form controls',icon:'T'},
+  {type:'textarea',label:'Text area',group:'Form controls',icon:'☰'},
+  {type:'select',label:'Dropdown',group:'Form controls',icon:'▾'},
+  {type:'checkbox',label:'Checkbox',group:'Form controls',icon:'☑'},
+  {type:'button',label:'Button',group:'Actions',icon:'▰'},
+  {type:'table',label:'Data table',group:'Data display',icon:'▦'}
+];
+function createId(prefix='node') {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`;
+}
+function createComponent(type,id=createId('component')) {
+  const defaults = {
+    heading:{text:'New heading',level:2},text:{text:'Write some supporting text here.'},
+    input:{label:'Text field',field:'text_field',placeholder:'Enter a value',required:false,bindingModelId:'',bindingFieldId:''},
+    textarea:{label:'Your notes',field:'notes',placeholder:'Enter your notes',required:false,bindingModelId:'',bindingFieldId:''},
+    select:{label:'Choose an option',field:'choice',options:'First option\nSecond option\nThird option',required:false,bindingModelId:'',bindingFieldId:''},
+    checkbox:{label:'I agree',field:'agreed',required:false,bindingModelId:'',bindingFieldId:''},
+    button:{text:'Submit',variant:'primary',action:'submit',targetPageId:'',bindingModelId:''},
+    card:{title:'Card title',body:'A useful card with supporting content.'},divider:{},
+    table:{title:'Recent records',columns:'name,email',bindingModelId:''},
+    section:{title:'Section',tone:'plain'},columns:{title:'Columns',tone:'plain'}
+  };
+  if (!Object.hasOwn(defaults,type)) throw new Error(`Unknown component: ${type}`);
+  const node={id,type,props:{...defaults[type]}};
+  if (CONTAINER_TYPES.includes(type)) node.children=[];
+  return node;
+}
+function createField(name='new_field',type='string',id=createId('field')) {
+  return {id,name,type,required:false,unique:false,primary:false,referenceModelId:'',referenceFieldId:''};
+}
+function createModel(name='New Model',table='new_model',id=createId('model')) {
+  return {id,name,table,fields:[{...createField('id','integer'),required:true,unique:true,primary:true},createField('name','string')]};
+}
+function createProject() {
+  // Stable example IDs avoid Svelte SSR/client hydration differences.
+  // Newly added components/models/pages still receive fresh IDs from createId().
+  const dashboard='page_dashboard',customers='page_new_customer';
+  const customer=createModel('Customer','customers','model_customer');
+  customer.fields[0].id='field_customer_id';
+  customer.fields[1].id='field_customer_name';
+  customer.fields[1].required=true;
+  customer.fields.push({...createField('email','string','field_customer_email'),required:true,unique:true});
+  const order=createModel('Order','orders','model_order');
+  order.fields[0].id='field_order_id';
+  order.fields[1].id='field_order_name';
+  order.fields.push({...createField('customer_id','integer','field_order_customer_id'),required:true,referenceModelId:customer.id,referenceFieldId:customer.fields[0].id});
+  order.fields.push({...createField('amount','decimal','field_order_amount'),required:true});
+  const section=createComponent('section','component_intro_section');section.props.title='Getting started';
+  section.children=[createComponent('text','component_intro_text'),createComponent('card','component_intro_card')];
+  section.children[0].props.text='Select components in the tree, or open Data models to design your tables and relationships.';
+  return {schemaVersion:SCHEMA_VERSION,id:'app_starter',name:'Customer Workspace',models:[customer,order],pages:[
+    {id:dashboard,name:'Overview',path:'/',components:[
+      {...createComponent('heading','component_overview_heading'),props:{text:'Customer Workspace',level:1}},section,
+      {...createComponent('button','component_overview_navigate'),props:{text:'Create a customer',variant:'primary',action:'navigate',targetPageId:customers,bindingModelId:''}}
+    ]},
+    {id:customers,name:'New customer',path:'/customers/new',components:[
+      {...createComponent('heading','component_form_heading'),props:{text:'New customer',level:1}},
+      {...createComponent('text','component_form_text'),props:{text:'Capture a new customer using this example form.'}},
+      {...createComponent('input','component_form_name'),props:{label:'Full name',field:'name',placeholder:'e.g. Alex Morgan',required:true,bindingModelId:customer.id,bindingFieldId:customer.fields[1].id}},
+      {...createComponent('input','component_form_email'),props:{label:'Email address',field:'email',placeholder:'alex@example.com',required:true,bindingModelId:customer.id,bindingFieldId:customer.fields[2].id}},
+      {...createComponent('button','component_form_save'),props:{text:'Save customer',variant:'primary',action:'submit',targetPageId:'',bindingModelId:customer.id}}
+    ]}
+  ]};
+}
+function cloneProject(data) { return JSON.parse(JSON.stringify(data)); }
+/** Existing v1 content is kept intact; adding model/tree capabilities is non-destructive. */
+function migrateProject(source) {
+  if (!source || typeof source!=='object' || Array.isArray(source)) throw new Error('Project must be an object');
+  if (source.schemaVersion===2) return source;
+  if (source.schemaVersion!==1) throw new Error(`Unsupported schema version: ${String(source.schemaVersion)}`);
+  return {...cloneProject(source),schemaVersion:2,models:[]};
+}
+function walkNodes(nodes,visit,parentId='',depth=0) {
+  for(const node of nodes) {visit(node,parentId,depth);if(Array.isArray(node.children))walkNodes(node.children,visit,node.id,depth+1);}
+}
+function findNodeLocation(page,id) {
+  function search(nodes,parentId='',depth=0) {
+    for(let i=0;i<nodes.length;i++) {
+      if(nodes[i].id===id) return {node:nodes[i],nodes,index:i,parentId,depth};
+      if(nodes[i].children) {const found=search(nodes[i].children,nodes[i].id,depth+1);if(found)return found;}
+    }
+    return null;
+  }
+  return search(page.components);
+}
+function insertNode(page,node,parentId='',index) {
+  const parent=parentId ? findNodeLocation(page,parentId)?.node : null;
+  if (parentId && (!parent || !CONTAINER_TYPES.includes(parent.type))) throw new Error('Destination is not a container');
+  const nodes=parent ? parent.children : page.components;
+  const at=index===undefined ? nodes.length : index;
+  if(!Number.isInteger(at)||at<0||at>nodes.length)throw new Error('Invalid insertion index');
+  nodes.splice(at,0,node);
+}
+function moveNode(page,id,toParentId='',toIndex) {
+  const from=findNodeLocation(page,id);
+  if(!from)throw new Error('Missing component');
+  if(toParentId===id)throw new Error('Cannot nest a component inside itself');
+  let descendant=false;
+  walkNodes([from.node],n=>{if(n.id===toParentId)descendant=true;});
+  if(descendant)throw new Error('Cannot create a container cycle');
+  const parent=toParentId?findNodeLocation(page,toParentId)?.node:null;
+  if(toParentId && (!parent || !CONTAINER_TYPES.includes(parent.type)))throw new Error('Destination is not a container');
+  const target=parent?parent.children:page.components;
+  const to=toIndex===undefined?target.length:toIndex;
+  if(!Number.isInteger(to)||to<0||to>target.length)throw new Error('Invalid move index');
+  from.nodes.splice(from.index,1);
+  target.splice(target===from.nodes && to>from.index?to-1:to,0,from.node);
+}
+function removeNode(page,id) {
+  const found=findNodeLocation(page,id);if(!found)return false;
+  found.nodes.splice(found.index,1);return true;
+}
+function duplicateNode(node) {
+  const copy=cloneProject(node);
+  walkNodes([copy],n=>{n.id=createId('component');});
+  return copy;
+}
+function moveComponent(components,fromIndex,toIndex) {
+  if(!Number.isInteger(fromIndex)||!Number.isInteger(toIndex)||fromIndex<0||fromIndex>=components.length||toIndex<0||toIndex>components.length)throw new Error('Invalid move indices');
+  const copy=components.slice();const [item]=copy.splice(fromIndex,1);
+  copy.splice(fromIndex<toIndex?toIndex-1:toIndex,0,item);return copy;
+}
+const plain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const identifier=/^[a-z][a-z0-9_]{0,63}$/;
+function validateProject(project) {
+  if(!plain(project))throw new Error('Project must be a JSON object');
+  if(project.schemaVersion!==SCHEMA_VERSION)throw new Error(`Unsupported schema version: ${String(project.schemaVersion)}`);
+  if(typeof project.name!=='string'||!project.name||project.name.length>120)throw new Error('Invalid project name');
+  if(typeof project.id!=='string'||!project.id||project.id.length>120)throw new Error('Invalid project ID');
+  if(!Array.isArray(project.pages)||!project.pages.length||project.pages.length>100)throw new Error('Project must have 1–100 pages');
+  if(!Array.isArray(project.models)||project.models.length>100)throw new Error('Invalid model collection');
+  const modelIds=new Set(),tables=new Set(),modelLookup=new Map();
+  for(const model of project.models) {
+    if(!plain(model)||typeof model.id!=='string'||!model.id||modelIds.has(model.id))throw new Error('Invalid or duplicate model ID');
+    modelIds.add(model.id);modelLookup.set(model.id,model);
+    if(typeof model.name!=='string'||!model.name||model.name.length>120)throw new Error('Invalid model name');
+    if(typeof model.table!=='string'||!identifier.test(model.table)||tables.has(model.table))throw new Error('Invalid or duplicate SQL table name');
+    tables.add(model.table);
+    if(!Array.isArray(model.fields)||model.fields.length<1||model.fields.length>100)throw new Error('A model needs 1–100 fields');
+    const names=new Set(),ids=new Set();let primaryCount=0;
+    for(const field of model.fields) {
+      if(!plain(field)||typeof field.id!=='string'||!field.id||ids.has(field.id)||typeof field.name!=='string'||!identifier.test(field.name)||names.has(field.name))throw new Error('Invalid or duplicate field');
+      ids.add(field.id);names.add(field.name);
+      if(!FIELD_TYPES.includes(field.type)||typeof field.required!=='boolean'||typeof field.unique!=='boolean'||typeof field.primary!=='boolean')throw new Error('Invalid field definition');
+      if(typeof field.referenceModelId!=='string'||typeof field.referenceFieldId!=='string')throw new Error('Invalid relation definition');
+      if(field.type==='text'&&(field.unique||field.primary))throw new Error('TEXT fields cannot be unique or primary without an index prefix');
+      if(field.primary){primaryCount++;if(!field.required)throw new Error('Primary field must be required');}
+    }
+    if(primaryCount!==1)throw new Error('Each model requires one primary field');
+  }
+  for(const model of project.models)for(const field of model.fields){
+    if(!field.referenceModelId&&!field.referenceFieldId)continue;
+    const target=modelLookup.get(field.referenceModelId)?.fields.find(f=>f.id===field.referenceFieldId);
+    if(!target||!target.primary||field.type!==target.type)throw new Error('Invalid relationship reference or incompatible types');
+  }
+  const pageIds=new Set(),componentIds=new Set();
+  for(const page of project.pages) {
+    if(!plain(page)||typeof page.id!=='string'||!page.id||pageIds.has(page.id))throw new Error('Invalid or duplicate page ID');
+    pageIds.add(page.id);
+    if(typeof page.name!=='string'||!page.name||page.name.length>120||typeof page.path!=='string'||!page.path.startsWith('/')||page.path.length>255)throw new Error('Invalid page settings');
+    if(!Array.isArray(page.components))throw new Error('Invalid page components');
+    let count=0;
+    const check=(nodes,depth)=>{
+      if(depth>7)throw new Error('Maximum component nesting depth exceeded');
+      for(const c of nodes) {
+        count++;if(count>1000)throw new Error('A page may have up to 1000 components');
+        if(!plain(c)||typeof c.id!=='string'||!c.id||componentIds.has(c.id)||!COMPONENT_TYPES.includes(c.type)||!plain(c.props))throw new Error('Invalid or duplicate component');
+        componentIds.add(c.id);
+        for(const [key,value] of Object.entries(c.props))if(key.length>120||!['string','number','boolean'].includes(typeof value)||(typeof value==='string'&&value.length>10000))throw new Error(`Invalid property: ${key}`);
+        if(CONTAINER_TYPES.includes(c.type)) {if(!Array.isArray(c.children))throw new Error('Container needs a children array');check(c.children,depth+1);}
+        else if(c.children!==undefined)throw new Error('Leaf components cannot contain children');
+        if(c.props.bindingModelId||c.props.bindingFieldId){
+          const model=modelLookup.get(c.props.bindingModelId);
+          if(!model||(['input','textarea','select','checkbox'].includes(c.type)&&!model.fields.some(f=>f.id===c.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingFieldId))throw new Error('Broken field binding');
+        }
+        if(c.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(c.props.action))throw new Error('Invalid button action');
+      }
+    };check(page.components,0);
+  }
+  return project;
+}
+
+/** Export is declarative UI markup; it never executes project-supplied JavaScript. */
+
+function escapeHtml(value='') {return String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');}
+function exportPageToSvelte(page) {
+  const E=escapeHtml;
+  const output=['<!-- Generated UI only: actions, access control and persistence require runtime wiring. -->','<main class="generated-page">'];
+  function emit(nodes,indent='  ') {
+    for(const {type,props:p,children=[]} of nodes){
+      switch(type){
+        case 'section': case 'columns':
+          output.push(`${indent}<section class="${type==='columns'?'layout-columns':'layout-section'}"><h2>${E(p.title)}</h2>`);
+          emit(children,indent+'  ');output.push(`${indent}</section>`);break;
+        case 'heading': {const h=[1,2,3,4].includes(Number(p.level))?Number(p.level):2;output.push(`${indent}<h${h}>${E(p.text)}</h${h}>`);break;}
+        case 'text':output.push(`${indent}<p>${E(p.text)}</p>`);break;
+        case 'input':output.push(`${indent}<label>${E(p.label)}<input name="${E(p.field)}" placeholder="${E(p.placeholder)}"${p.required?' required':''} /></label>`);break;
+        case 'textarea':output.push(`${indent}<label>${E(p.label)}<textarea name="${E(p.field)}" placeholder="${E(p.placeholder)}"${p.required?' required':''}></textarea></label>`);break;
+        case 'select':output.push(`${indent}<label>${E(p.label)}<select name="${E(p.field)}"${p.required?' required':''}>${String(p.options??'').split('\n').filter(Boolean).map(o=>`<option>${E(o)}</option>`).join('')}</select></label>`);break;
+        case 'checkbox':output.push(`${indent}<label><input type="checkbox" name="${E(p.field)}"${p.required?' required':''} /> ${E(p.label)}</label>`);break;
+        case 'button':output.push(`${indent}<button type="button" class="${p.variant==='secondary'?'secondary':'primary'}">${E(p.text)}</button>`);break;
+        case 'card':output.push(`${indent}<section class="card"><h3>${E(p.title)}</h3><p>${E(p.body)}</p></section>`);break;
+        case 'divider':output.push(`${indent}<hr />`);break;
+        case 'table':{const cols=String(p.columns??'').split(',').map(x=>x.trim()).filter(Boolean);output.push(`${indent}<section><h3>${E(p.title)}</h3><table><thead><tr>${cols.map(x=>`<th>${E(x)}</th>`).join('')}</tr></thead><tbody></tbody></table></section>`);break;}
+        default:throw new Error(`Cannot component: ${type}`);
+      }
+    }
+  }
+  emit(page.components);
+  output.push('</main>','<style>','.generated-page { max-width:900px; padding:2rem; margin:auto; display:grid; gap:1rem; font:14px system-ui }','.layout-section { border:1px solid #dce3ef; padding:1rem; display:grid; gap:1rem; border-radius:12px }','.layout-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }','.layout-columns > h2 { grid-column:1/-1 }','@media(max-width:620px) { .layout-columns { grid-template-columns:1fr } }','label {display:grid;gap:0.5rem} input,textarea,select {padding:0.7rem;border:1px solid #cbd5e1;border-radius:7px}','.card{padding:1rem;border:1px solid #dce3ef;border-radius:10px}button{padding:0.8rem;border:0;border-radius:8px}.primary{background:#2563eb;color:white}.secondary{background:#e2e8f0}', '</style>');
+  return output.join('\n');
+}
+/** MySQL 8 compatible initial schema only. Never runs SQL against a real database. */
+function exportMySQL(project) {
+  validateProject(project);
+  const t={string:'VARCHAR(255)',text:'TEXT',integer:'BIGINT UNSIGNED',decimal:'DECIMAL(18,4)',boolean:'TINYINT(1)',date:'DATE',datetime:'DATETIME(3)'};
+  const quote=id=>'`'+id+'`'; // validated ASCII SQL identifiers, no arbitrary SQL fragments
+  const lines=['-- Generated MySQL schema. Review migrations before applying.','-- Visual Application Studio schema version 2',''];
+  for(const model of project.models) {
+    const columns=model.fields.map(f=>{
+      let sql=`  ${quote(f.name)} ${t[f.type]}`;
+      if(f.required||f.primary)sql+=' NOT NULL';
+      if(f.primary&&f.type==='integer')sql+=' AUTO_INCREMENT';
+      if(f.unique&&!f.primary)sql+=' UNIQUE';
+      return sql;
+    });
+    const pk=model.fields.find(f=>f.primary);
+    columns.push(`  PRIMARY KEY (${quote(pk.name)})`);
+    lines.push(`CREATE TABLE IF NOT EXISTS ${quote(model.table)} (`,columns.join(',\n'),' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'.trimStart(),'');
+  }
+  // Foreign keys follow table creation so model ordering does not matter.
+  for(const model of project.models)for(const f of model.fields)if(f.referenceModelId){
+    const target=project.models.find(m=>m.id===f.referenceModelId),targetField=target.fields.find(x=>x.id===f.referenceFieldId);
+    const constraint=`fk_${model.table}_${f.name}`;
+    if(constraint.length>64)throw new Error('Foreign key constraint name exceeds MySQL 64-character limit');
+    lines.push(`ALTER TABLE ${quote(model.table)} ADD CONSTRAINT ${quote(constraint)} FOREIGN KEY (${quote(f.name)}) REFERENCES ${quote(target.table)} (${quote(targetField.name)});`);
+  }
+  return lines.join('\n')+'\n';
+}
+
+// Dependency-free editor built from the same model and compilers as the SvelteKit source.
+const E=escapeHtml;
+const STORE='visual-application-studio-preview-v1';
+const PROP_FIELDS={
+  section:['title','tone'],columns:['title','tone'],heading:['text','level'],text:['text'],card:['title','body'],divider:[],
+  input:['label','field','placeholder','required','bindingModelId','bindingFieldId'],
+  textarea:['label','field','placeholder','required','bindingModelId','bindingFieldId'],
+  select:['label','field','options','required','bindingModelId','bindingFieldId'],
+  checkbox:['label','field','required','bindingModelId','bindingFieldId'],button:['text','variant','action','targetPageId'],table:['title','columns']
+};
+const PROP_OPTIONS={level:['1','2','3','4'],tone:['plain','muted'],variant:['primary','secondary'],action:['submit','navigate','reset','message']};
+let project=createProject(),active=project.pages[0].id,selected='',tab='pages',modelId=project.models[0]?.id||'',fieldId='',mode='design',viewport='desktop',notice='',fields={},records={},history=[],redoStack=[];
+try {const saved=localStorage.getItem(STORE);if(saved){project=validateProject(migrateProject(JSON.parse(saved)));active=project.pages[0].id;modelId=project.models[0]?.id||'';}}catch(err){notice='Unable to restore saved project: '+err.message;}
+const page=()=>project.pages.find(p=>p.id===active)||project.pages[0];
+const node=()=>findNodeLocation(page(),selected)?.node;
+const model=()=>project.models.find(m=>m.id===modelId);
+const field=()=>model()?.fields.find(f=>f.id===fieldId);
+function save(){try{localStorage.setItem(STORE,JSON.stringify(project));}catch(e){notice='Browser autosave unavailable.';}}
+function mutate(fn){const next=cloneProject(project);fn(next);validateProject(next);history.push(project);if(history.length>40)history.shift();redoStack=[];project=next;save();render();}
+function safe(fn){try{notice='';mutate(fn);return true;}catch(err){notice=err.message;render();return false;}}
+function undo(){if(!history.length)return;redoStack.push(project);project=history.pop();selected='';fieldId='';save();render();}
+function redo(){if(!redoStack.length)return;history.push(project);project=redoStack.pop();selected='';fieldId='';save();render();}
+function pickPage(id){tab='pages';active=id;selected='';fields={};notice='';render();}
+function pickModel(id){tab='data';mode='design';modelId=id;fieldId='';notice='';render();}
+function add(type,parent='',index){const c=createComponent(type);if(safe(p=>insertNode(p.pages.find(x=>x.id===active),c,parent,index))){selected=c.id;render();}}
+function addPage(){const id=createId('page');if(safe(p=>p.pages.push({id,name:`Page ${p.pages.length+1}`,path:`/page-${p.pages.length+1}`,components:[createComponent('heading')]})))pickPage(id);}
+function addModel(){const n=project.models.length+1,id=createId('model');if(safe(p=>p.models.push(createModel(`Model ${n}`,`model_${n}`,id))))pickModel(id);}
+function addField(){if(!model())return;const f=createField(`field_${model().fields.length+1}`);if(safe(p=>p.models.find(m=>m.id===modelId).fields.push(f))){fieldId=f.id;render();}}
+function updateProp(k,value){safe(p=>{const c=findNodeLocation(p.pages.find(x=>x.id===active),selected)?.node;if(!c)throw new Error('Select a component');c.props[k]=value;
+  if(k==='bindingModelId'){const f=p.models.find(m=>m.id===value)?.fields.find(x=>!x.primary);c.props.bindingFieldId=f?.id||'';if(f)c.props.field=f.name;}
+  if(k==='bindingFieldId'&&value){const f=p.models.find(m=>m.id===c.props.bindingModelId)?.fields.find(x=>x.id===value);if(f)c.props.field=f.name;}
+});}
+function updateField(k,v){safe(p=>{const f=p.models.find(m=>m.id===modelId).fields.find(x=>x.id===fieldId);f[k]=v;if(k==='type'){f.referenceModelId='';f.referenceFieldId='';}});}
+function setRelation(v){safe(p=>{const f=p.models.find(m=>m.id===modelId).fields.find(x=>x.id===fieldId);const [mId,fId]=v.split('|');f.referenceModelId=mId||'';f.referenceFieldId=fId||'';if(mId){const target=p.models.find(m=>m.id===mId).fields.find(x=>x.id===fId);f.type=target.type;f.primary=false;}});}
+function download(name,text,type){const u=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);}
+function play(c){const p=c.props;if(p.action==='navigate'){if(project.pages.some(pg=>pg.id===p.targetPageId))pickPage(p.targetPageId);else notice='Select a destination page in the inspector.';}else if(p.action==='reset'){fields={};notice='Form reset.';}else if(p.action==='message'){notice=`${p.text} clicked.`;}else{const required=[];walkNodes(page().components,x=>{if(['input','textarea','select','checkbox'].includes(x.type)&&x.props.required&&!fields[x.props.field])required.push(x);});if(required.length)notice=`Required: ${required.map(x=>x.props.label).join(', ')}`;else{records[page().id]=[...(records[page().id]||[]),{...fields}];notice=`Preview submission: ${JSON.stringify(fields)}`;}}render();}
+function treeHtml(nodes,depth=0){return nodes.map(n=>`<div class="tree-node" style="padding-left:${depth*13}px"><button class="${selected===n.id?'active':''}" data-select="${E(n.id)}"><span class="tree-glyph">${E(CATALOG.find(x=>x.type===n.type)?.icon||'▤')}</span><span class="tree-name">${E(n.props.title||n.props.label||n.props.text||n.type)}</span>${n.children?`<span class="tree-count">${n.children.length}</span>`:''}</button></div>${n.children?treeHtml(n.children,depth+1):''}`).join('');}
+function nodeHtml(c){const p=c.props;switch(c.type){
+  case 'heading':{const lvl=[1,2,3,4].includes(+p.level)?+p.level:2;return `<h${lvl}>${E(p.text)}</h${lvl}>`;}
+  case 'text':return `<p>${E(p.text)}</p>`;
+  case 'card':return `<div class="render-card"><h3>${E(p.title)}</h3><p>${E(p.body)}</p></div>`;
+  case 'divider':return '<hr>';
+  case 'section':case 'columns':return `<section class="layout-box ${c.type==='columns'?'layout-columns':''} ${p.tone==='muted'?'layout-muted':''}"><h3 class="layout-title">${E(p.title)}</h3><div class="layout-children ${c.type==='columns'?'two-col':''}">${canvasHtml(c.children,c.id)}</div></section>`;
+  case 'input':case 'textarea':case 'select':{const disabled=mode==='design'?'disabled':'';let control='';if(c.type==='input')control=`<input class="form-input" data-field="${E(p.field)}" placeholder="${E(p.placeholder)}" value="${E(fields[p.field]||'')}" ${disabled}>`;else if(c.type==='textarea')control=`<textarea class="form-input" data-field="${E(p.field)}" rows="3" placeholder="${E(p.placeholder)}" ${disabled}>${E(fields[p.field]||'')}</textarea>`;else control=`<select class="form-input" data-field="${E(p.field)}" ${disabled}><option value="">Select one…</option>${String(p.options||'').split('\n').filter(Boolean).map(opt=>`<option value="${E(opt)}" ${fields[p.field]===opt?'selected':''}>${E(opt)}</option>`).join('')}</select>`;return `<label class="field-label">${E(p.label)}${p.required?'<em> *</em>':''}</label>${control}`;}
+  case 'checkbox':return `<label class="checkline"><input type="checkbox" data-field="${E(p.field)}" ${fields[p.field]?'checked':''} ${mode==='design'?'disabled':''}>${E(p.label)}</label>`;
+  case 'button':return `<button class="render-button ${p.variant==='secondary'?'secondary':''}" ${mode==='design'?'disabled':''} data-play="${E(c.id)}">${E(p.text)}</button>`;
+  case 'table':{const columns=String(p.columns||'').split(',').map(s=>s.trim()).filter(Boolean);return `<div class="table-wrap"><h3>${E(p.title)}</h3><table><thead><tr>${columns.map(x=>`<th>${E(x)}</th>`).join('')}</tr></thead><tbody><tr>${columns.map(x=>`<td class="muted">${E((records[page().id]||[]).at(-1)?.[x.toLowerCase().replaceAll(' ','_')]||'No data yet')}</td>`).join('')}</tr></tbody></table></div>`;}
+  default:return '';
+}}
+function canvasHtml(nodes,parent=''){return nodes.map((c,i)=>`${mode==='design'?`<div class="dropzone" data-drop-parent="${E(parent)}" data-drop-index="${i}"></div>`:''}<div class="component ${mode==='design'?'editable':''} ${selected===c.id&&mode==='design'?'selected':''}" ${mode==='design'?`draggable="true" data-select="${E(c.id)}"`:''}>${mode==='design'?'<span class="draghandle">⠿</span>':''}${nodeHtml(c)}</div>`).join('')+(mode==='design'?`<div class="dropzone last" data-drop-parent="${E(parent)}" data-drop-index="${nodes.length}">Drop a component here</div>`:'');}
+function inspector(){if(tab==='data'){
+  const m=model(),f=field();if(!m)return '<div class="inspect-body"><p class="hint">Create an entity to start modelling.</p></div>';
+  let content='';if(f){const refs=project.models.flatMap(x=>x.fields.filter(a=>a.primary).map(a=>`<option value="${E(x.id+'|'+a.id)}" ${f.referenceModelId===x.id&&f.referenceFieldId===a.id?'selected':''}>${E(x.name+' → '+a.name)}</option>`)).join('');
+    content=`<div class="section-label">ATTRIBUTE</div><label class="property-label">Name<input data-fprop="name" value="${E(f.name)}"></label><label class="property-label">Type<select data-fprop="type" ${f.primary||f.referenceModelId?'disabled':''}>${FIELD_TYPES.map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}</select></label><label class="property-label">Required<input type="checkbox" data-fprop="required" ${f.required?'checked':''} ${f.primary?'disabled':''}></label><label class="property-label">Unique<input type="checkbox" data-fprop="unique" ${f.unique?'checked':''} ${f.primary?'disabled':''}></label><label class="property-label">References<select data-relation ${f.primary?'disabled':''}><option value="">None</option>${refs}</select></label>${f.primary?'':'<button class="danger page-delete" data-act="delete-field">Delete attribute</button>'}<button class="property-link" data-act="entity-settings">← Entity settings</button>`;
+  }else content=`<div class="section-label">ENTITY</div><label class="property-label">Display name<input data-mprop="name" value="${E(m.name)}"></label><label class="property-label">MySQL table<input data-mprop="table" value="${E(m.table)}"></label><button class="model-add" data-act="add-field">+ Add attribute</button><button class="danger page-delete" data-act="delete-model">Delete entity</button><p class="hint">SQL identifiers use lowercase ASCII letters, digits and underscores. Each model has one primary key.</p>`;
+  return `<div class="inspect-body"><div class="selected-info"><div class="selection-icon">▦</div><div><strong>${E(m.name)}</strong><small>${f?'Editing attribute':'Entity settings'}</small></div></div>${content}</div>`;
+ }
+ const c=node();if(!c||mode!=='design')return `<div class="inspect-body"><div class="section-label">PAGE SETTINGS</div><label class="property-label">Page name<input data-pageprop="name" value="${E(page().name)}"></label><label class="property-label">Page path<input data-pageprop="path" value="${E(page().path)}"></label>${project.pages.length>1?'<button class="danger page-delete" data-act="delete-page">Delete page</button>':''}<p class="hint">Select components in the tree or canvas. Preview data is held in memory only.</p></div>`;
+ return `<div class="inspect-body"><div class="selected-info"><div class="selection-icon">${E(CATALOG.find(x=>x.type===c.type)?.icon)}</div><div><strong>${E(CATALOG.find(x=>x.type===c.type)?.label)}</strong><small>Component · ${E(c.type)}</small></div></div><div class="section-label">CONFIGURATION</div>${PROP_FIELDS[c.type].map(k=>{
+ const v=c.props[k];let control='';if(k==='required')control=`<input data-prop="${k}" type="checkbox" ${v?'checked':''}>`;
+ else if(k==='targetPageId')control=`<select data-prop="${k}"><option value="">Select destination…</option>${project.pages.map(p=>`<option value="${E(p.id)}" ${v===p.id?'selected':''}>${E(p.name)}</option>`).join('')}</select>`;
+ else if(k==='bindingModelId')control=`<select data-prop="${k}"><option value="">Unbound</option>${project.models.map(m=>`<option value="${E(m.id)}" ${v===m.id?'selected':''}>${E(m.name)}</option>`).join('')}</select>`;
+ else if(k==='bindingFieldId')control=`<select data-prop="${k}"><option value="">No attribute</option>${(project.models.find(m=>m.id===c.props.bindingModelId)?.fields||[]).map(f=>`<option value="${E(f.id)}" ${v===f.id?'selected':''}>${E(f.name+' · '+f.type)}</option>`).join('')}</select>`;
+ else if(PROP_OPTIONS[k])control=`<select data-prop="${k}">${PROP_OPTIONS[k].map(opt=>`<option value="${opt}" ${String(v)===opt?'selected':''}>${opt}</option>`).join('')}</select>`;
+ else if(['body','options'].includes(k)||(k==='text'&&c.type==='text'))control=`<textarea data-prop="${k}" rows="4">${E(v||'')}</textarea>`;
+ else control=`<input data-prop="${k}" value="${E(v??'')}">`;
+ return `<label class="property-label">${E(k==='bindingModelId'?'Bound entity':k==='bindingFieldId'?'Bound attribute':k.replace(/[A-Z]/g,x=>' '+x))}${control}</label>`;
+ }).join('')}${CONTAINER_TYPES.includes(c.type)?'<button class="model-add" data-act="add-text-inside">+ Add text inside</button>':''}<div class="inspector-buttons"><button data-act="duplicate">Duplicate</button><button class="danger" data-act="remove">Delete</button></div><p class="hint">Nested layouts are editable. Drag components between containers or select them from the tree.</p></div>`;
+}
+function dataHtml(){const relationships=project.models.flatMap(m=>m.fields.filter(f=>f.referenceModelId).map(f=>{const ref=project.models.find(x=>x.id===f.referenceModelId),rf=ref?.fields.find(x=>x.id===f.referenceFieldId);return `<div class="relation-row"><span>${E(m.table+'.'+f.name)}</span><span>→</span><span>${E(ref?.table+'.'+rf?.name)}</span></div>`;})).join('');
+ return `<div class="canvas-scroll data-scroll"><div class="data-workspace"><div class="data-intro"><div><small>SCHEMA DESIGNER</small><h2>Data models</h2><p>Define entities, typed attributes, primary keys and foreign-key relationships.</p></div><button class="render-button" data-act="add-model">+ New entity</button></div>${project.models.length?'':'<div class="empty-state">No models yet. Create an entity to begin.</div>'}<div class="model-grid">${project.models.map(m=>`<section class="model-card ${modelId===m.id?'model-active':''}"><button class="model-header" data-model="${E(m.id)}"><div><small>ENTITY</small><strong>${E(m.name)}</strong><code>${E(m.table)}</code></div><span>▦</span></button><div class="model-fields">${m.fields.map(f=>`<button data-field-select="${E(m.id+'|'+f.id)}" class="${modelId===m.id&&fieldId===f.id?'field-active':''}"><span class="field-name">${f.primary?'◆':f.referenceModelId?'↗':'∙'} ${E(f.name)}</span><span class="field-type">${E(f.type)}${f.required?' · required':''}</span></button>`).join('')}</div><div class="model-footer"><span>${m.fields.length} fields</span><button data-add-field-model="${E(m.id)}">+ Field</button></div></section>`).join('')}</div><div class="relationship-panel"><h3>Relationships</h3>${relationships||'<p>No foreign keys defined yet.</p>'}<p>Foreign keys are generated after table creation, permitting cross-references.</p></div>${notice?`<div class="feedback" role="status">${E(notice)}</div>`:''}</div></div>`;
+}
+function render(){document.getElementById('app').innerHTML=`<div class="studio"><header class="topbar"><div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · alpha 0.2</small></div></div><div class="project"><span class="status-dot"></span><input aria-label="Project name" data-project-name value="${E(project.name)}"></div><nav class="actions"><button data-act="undo" ${history.length?'':'disabled'} title="Undo">↶</button><button data-act="redo" ${redoStack.length?'':'disabled'} title="Redo">↷</button><button data-act="import">Import</button><button data-act="export-json">Save JSON</button><button data-act="export-svelte">Export UI</button><button data-act="export-sql">Export SQL</button></nav><input type="file" class="hidden" id="import-file" accept=".json,application/json"></header><div class="workspace"><aside class="sidebar"><div class="workspace-switch"><button class="${tab==='pages'?'active':''}" data-tab="pages">Pages & tree</button><button class="${tab==='data'?'active':''}" data-tab="data">Data models</button></div>${tab==='pages'?`<div class="sidebar-head"><span>PAGES</span><button data-act="add-page">+</button></div><div class="project-tree">${project.pages.map(p=>`<button data-page="${E(p.id)}" class="${active===p.id?'active':''}"><span>▤</span>${E(p.name)}</button>`).join('')}</div><div class="sidebar-head"><span>COMPONENT TREE</span><small>${page().components.length} root items</small></div><div class="component-tree">${treeHtml(page().components)}</div><div class="sidebar-head toolbox-title"><span>COMPONENTS</span><small>Drag or click to add</small></div><div class="toolbox">${['Layout','Content','Form controls','Actions','Data display'].map(g=>`<div class="group-label">${g}</div><div class="tool-grid">${CATALOG.filter(c=>c.group===g).map(c=>`<button class="tool" draggable="true" data-new="${c.type}"><span class="tool-icon">${E(c.icon)}</span>${E(c.label)}</button>`).join('')}</div>`).join('')}</div>`:`<div class="sidebar-head"><span>DATA ENTITIES</span><button data-act="add-model">+</button></div><div class="project-tree">${project.models.map(m=>`<button data-model="${E(m.id)}" class="${modelId===m.id?'active':''}"><span>▦</span>${E(m.name)}<small>${m.fields.length} fields</small></button>`).join('')}</div><p class="sidebar-note">Define typed fields and relationships, then export MySQL DDL.</p>`}</aside><main class="workarea"><div class="canvasbar"><div class="breadcrumbs">${E(project.name)} <span>/</span> <b>${E(tab==='pages'?page().name:'Data model')}</b>${tab==='pages'?`<span class="path">${E(page().path)}</span>`:''}</div>${tab==='pages'?`<div class="canvas-tools"><div class="segment"><button class="${viewport==='desktop'?'chosen':''}" data-viewport="desktop">▣</button><button class="${viewport==='mobile'?'chosen':''}" data-viewport="mobile">▯</button></div><div class="segment"><button class="${mode==='design'?'chosen':''}" data-mode="design">Design</button><button class="${mode==='preview'?'chosen':''}" data-mode="preview">▶ Preview</button></div></div>`:'<div class="canvas-tools"><span class="data-caption">Logical model → MySQL schema</span><button class="model-add" data-act="add-model">+ Entity</button></div>'}</div>${tab==='pages'?`<div class="canvas-scroll"><div class="page-shell ${viewport==='mobile'?'mobile':''}"><div class="page-heading"><div><small>APPLICATION PAGE</small><h2>${E(page().name)}</h2></div><span>${mode==='design'?'DESIGN CANVAS':'LIVE PREVIEW'}</span></div><div class="page-content">${canvasHtml(page().components)}${notice?`<div class="feedback" role="status">${E(notice)}</div>`:''}</div></div></div>`:dataHtml()}<div class="statusbar"><span>● Project autosaved in browser</span><span>${project.pages.length} pages · ${project.models.length} models</span></div></main><aside class="inspector"><div class="inspector-title"><span>${tab==='data'?'DATA PROPERTIES':'PROPERTIES'}</span><span class="inspect-icon">⚙</span></div>${inspector()}</aside></div></div>`;}
+const root=document.getElementById('app');
+root.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act],[data-tab],[data-page],[data-model],[data-field-select],[data-add-field-model],[data-new],[data-mode],[data-viewport],[data-select],[data-play]');
+  if(!el)return;const d=el.dataset;
+  if(d.tab){tab=d.tab;if(tab==='data'){mode='design';selected='';}render();return;}
+  if(d.page){pickPage(d.page);return;}
+  if(d.model){pickModel(d.model);return;}
+  if(d.fieldSelect){[modelId,fieldId]=d.fieldSelect.split('|');render();return;}
+  if(d.addFieldModel){modelId=d.addFieldModel;fieldId='';addField();return;}
+  if(d.new){add(d.new,node()&&CONTAINER_TYPES.includes(node().type)?selected:'');return;}
+  if(d.mode){mode=d.mode;selected='';notice='';render();return;}
+  if(d.viewport){viewport=d.viewport;render();return;}
+  if(d.play&&mode==='preview'){const n=findNodeLocation(page(),d.play)?.node;if(n)play(n);return;}
+  if(d.select&&mode==='design'){selected=d.select;render();return;}
+  switch(d.act){
+    case 'undo':undo();break;case 'redo':redo();break;case 'add-page':addPage();break;case 'add-model':addModel();break;case 'add-field':addField();break;
+    case 'entity-settings':fieldId='';render();break;
+    case 'delete-page':if(project.pages.length>1&&safe(p=>p.pages=p.pages.filter(x=>x.id!==active)))pickPage(project.pages[0].id);break;
+    case 'remove':if(safe(p=>removeNode(p.pages.find(x=>x.id===active),selected))){selected='';render();}break;
+    case 'duplicate':{if(!node())break;const copy=duplicateNode(node());if(safe(p=>{const pg=p.pages.find(x=>x.id===active),loc=findNodeLocation(pg,selected);insertNode(pg,copy,loc.parentId,loc.index+1);})){selected=copy.id;render();}break;}
+    case 'add-text-inside':add('text',selected);break;
+    case 'delete-model':if(safe(p=>p.models=p.models.filter(m=>m.id!==modelId))){modelId=project.models[0]?.id||'';fieldId='';render();}break;
+    case 'delete-field':if(field()&&!field().primary&&safe(p=>{const m=p.models.find(x=>x.id===modelId);m.fields=m.fields.filter(f=>f.id!==fieldId);})) {fieldId='';render();}break;
+    case 'export-json':download('application.project.json',JSON.stringify(project,null,2),'application/json');break;
+    case 'export-svelte':download('generated-page.svelte',exportPageToSvelte(page()),'text/plain');break;
+    case 'export-sql':try{download('schema.mysql.sql',exportMySQL(project),'text/plain');notice='SQL exported. Review before applying.';}catch(err){notice=err.message;}render();break;
+    case 'import':document.getElementById('import-file').click();break;
+  }
+});
+root.addEventListener('change',async e=>{
+  const d=e.target.dataset;
+  if(e.target.id==='import-file'){
+    const f=e.target.files?.[0];if(!f)return;
+    try {const data=validateProject(migrateProject(JSON.parse(await f.text())));
+      if(safe(p=>{for(const k of Object.keys(p))delete p[k];Object.assign(p,data);})){active=data.pages[0].id;modelId=data.models[0]?.id||'';fieldId='';selected='';tab='pages';notice='Project imported successfully.';}}
+    catch(err){notice=`Import failed: ${err.message}`;}render();return;
+  }
+  if(d.projectName!==undefined)safe(p=>p.name=e.target.value);
+  else if(d.pageprop)safe(p=>p.pages.find(x=>x.id===active)[d.pageprop]=e.target.value);
+  else if(d.mprop)safe(p=>p.models.find(x=>x.id===modelId)[d.mprop]=e.target.value);
+  else if(d.fprop)updateField(d.fprop,e.target.type==='checkbox'?e.target.checked:e.target.value);
+  else if(d.relation!==undefined)setRelation(e.target.value);
+  else if(d.prop)updateProp(d.prop,e.target.type==='checkbox'?e.target.checked:d.prop==='level'?Number(e.target.value):e.target.value);
+  else if(d.field!==undefined)fields[d.field]=e.target.type==='checkbox'?e.target.checked:e.target.value;
+});
+root.addEventListener('input',e=>{if(e.target.dataset.field!==undefined)fields[e.target.dataset.field]=e.target.value;});
+root.addEventListener('dragstart',e=>{const tool=e.target.closest('[data-new]'),comp=e.target.closest('[data-select]');if(tool)e.dataTransfer.setData('text/plain',`new:${tool.dataset.new}`);else if(comp)e.dataTransfer.setData('text/plain',`move:${comp.dataset.select}`);});
+root.addEventListener('dragover',e=>{if(e.target.closest('[data-drop-index]'))e.preventDefault();});
+root.addEventListener('drop',e=>{const zone=e.target.closest('[data-drop-index]');if(!zone)return;e.preventDefault();e.stopPropagation();const index=+zone.dataset.dropIndex,parent=zone.dataset.dropParent||'',tag=e.dataTransfer.getData('text/plain');if(tag.startsWith('new:')){const type=tag.slice(4);if(CATALOG.some(x=>x.type===type))add(type,parent,index);}else if(tag.startsWith('move:'))safe(p=>moveNode(p.pages.find(x=>x.id===active),tag.slice(5),parent,index));});
+render();
+
+</script></body></html>
