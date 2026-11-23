@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 3,
+  "id": "app_ddcfbb00-097a-4eb0-bb2b-7433d3974a45",
+  "name": "Customer Workspace",
+  "models": [
+    {
+      "id": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8",
+      "name": "Customer",
+      "table": "customers",
+      "fields": [
+        {
+          "id": "field_7a50d642-5225-41f5-9087-334aefa353b9",
+          "name": "id",
+          "type": "integer",
+          "required": true,
+          "unique": true,
+          "primary": true,
+          "referenceModelId": "",
+          "referenceFieldId": ""
+        },
+        {
+          "id": "field_58601626-d375-4c9a-b5ac-92b6be732e8b",
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "unique": false,
+          "primary": false,
+          "referenceModelId": "",
+          "referenceFieldId": ""
+        },
+        {
+          "id": "field_6b43c929-6a5e-4258-9650-657bb38c1721",
+          "name": "email",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "primary": false,
+          "referenceModelId": "",
+          "referenceFieldId": ""
+        }
+      ]
+    },
+    {
+      "id": "model_ffa54b61-1c89-4e10-82cd-0ada0587e4f5",
+      "name": "Order",
+      "table": "orders",
+      "fields": [
+        {
+          "id": "field_f413d092-6a4e-444a-9824-b056ac34b3df",
+          "name": "id",
+          "type": "integer",
+          "required": true,
+          "unique": true,
+          "primary": true,
+          "referenceModelId": "",
+          "referenceFieldId": ""
+        },
+        {
+          "id": "field_215337a1-bbb6-47b8-a63e-404b1e17e37f",
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "unique": false,
+          "primary": false,
+          "referenceModelId": "",
+          "referenceFieldId": ""
+        },
+        {
+          "id": "field_848985d0-56b8-4126-8d18-69b7c968abbe",
+          "name": "customer_id",
+          "type": "integer",
+          "required": true,
+          "unique": false,
+          "primary": false,
+          "referenceModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8",
+          "referenceFieldId": "field_7a50d642-5225-41f5-9087-334aefa353b9"
+        },
+        {
+          "id": "field_5dd3c488-b98f-4112-b1a7-7cd90541e94a",
+          "name": "amount",
+          "type": "decimal",
+          "required": true,
+          "unique": false,
+          "primary": false,
+          "referenceModelId": "",
+          "referenceFieldId": ""
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "id": "page_d6a913d8-7d7e-4dab-acf5-c184721fcf89",
+      "name": "Overview",
+      "path": "/",
+      "components": [
+        {
+          "id": "component_9a76c5ba-134e-4efe-82a8-92bd6fbb449b",
+          "type": "heading",
+          "props": {
+            "text": "Customer Workspace",
+            "level": 1
+          }
+        },
+        {
+          "id": "component_9660d052-29b5-4e27-8a9e-0b3ad89ce159",
+          "type": "section",
+          "props": {
+            "title": "Getting started",
+            "tone": "plain"
+          },
+          "children": [
+            {
+              "id": "component_0e9d5b57-4503-4252-adc0-6b050de8a9b4",
+              "type": "text",
+              "props": {
+                "text": "Select components in the tree, or open Data models to design your tables and relationships."
+              }
+            },
+            {
+              "id": "component_b906b81b-8aaa-4234-bd59-dac58f7f6262",
+              "type": "card",
+              "props": {
+                "title": "Card title",
+                "body": "A useful card with supporting content."
+              }
+            }
+          ]
+        },
+        {
+          "id": "component_9654fccb-4308-4b91-bee5-09963d99af87",
+          "type": "button",
+          "props": {
+            "text": "Create a customer",
+            "variant": "primary",
+            "action": "navigate",
+            "targetPageId": "page_0de6a237-802a-477b-8b07-bf59e9c72731"
+          }
+        }
+      ]
+    },
+    {
+      "id": "page_0de6a237-802a-477b-8b07-bf59e9c72731",
+      "name": "New customer",
+      "path": "/customers/new",
+      "components": [
+        {
+          "id": "component_9f24b0e7-8bf7-4148-8a70-793de1ef1453",
+          "type": "heading",
+          "props": {
+            "text": "New customer",
+            "level": 1
+          }
+        },
+        {
+          "id": "component_89a20977-137c-4e8e-a7e4-8dcb0a722c0c",
+          "type": "text",
+          "props": {
+            "text": "Capture a new customer using this example form."
+          }
+        },
+        {
+          "id": "component_28008854-b866-4cc8-b765-1240e54e9e5e",
+          "type": "input",
+          "props": {
+            "label": "Full name",
+            "field": "name",
+            "placeholder": "e.g. Alex Morgan",
+            "required": true,
+            "bindingModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8",
+            "bindingFieldId": "field_58601626-d375-4c9a-b5ac-92b6be732e8b"
+          }
+        },
+        {
+          "id": "component_56d25c9d-84f2-40dd-b77a-efa3996a3e42",
+          "type": "input",
+          "props": {
+            "label": "Email address",
+            "field": "email",
+            "placeholder": "alex@example.com",
+            "required": true,
+            "bindingModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8",
+            "bindingFieldId": "field_6b43c929-6a5e-4258-9650-657bb38c1721"
+          }
+        },
+        {
+          "id": "component_577522d2-9446-45ac-8f3a-074f1710ccb7",
+          "type": "button",
+          "props": {
+            "text": "Save customer",
+            "variant": "primary",
+            "action": "create",
+            "targetPageId": "",
+            "bindingModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8"
+          }
+        },
+        {
+          "id": "component_6bc90d08-6db4-466b-89d8-11cc3b2abd0d",
+          "type": "button",
+          "props": {
+            "text": "Update selected",
+            "variant": "secondary",
+            "action": "update",
+            "targetPageId": "",
+            "bindingModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8"
+          }
+        },
+        {
+          "id": "component_342e9a72-96d1-4371-a06b-a4ba674f83eb",
+          "type": "button",
+          "props": {
+            "text": "Delete selected",
+            "variant": "secondary",
+            "action": "delete",
+            "targetPageId": "",
+            "bindingModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8"
+          }
+        },
+        {
+          "id": "component_cca202f6-824f-46b8-85a4-e20cc68d7b2d",
+          "type": "table",
+          "props": {
+            "title": "Customers in MySQL",
+            "columns": "name,email",
+            "bindingModelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8"
+          }
+        }
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "workflow_published_customer",
+      "name": "Validate and save customer",
+      "trigger": {
+        "pageId": "page_0de6a237-802a-477b-8b07-bf59e9c72731",
+        "componentId": "component_577522d2-9446-45ac-8f3a-074f1710ccb7",
+        "event": "click"
+      },
+      "startStepId": "wf_check_name",
+      "steps": [
+        {
+          "id": "wf_check_name",
+          "type": "condition",
+          "field": "name",
+          "operator": "filled",
+          "value": "",
+          "modelId": "",
+          "trueId": "wf_save",
+          "falseId": "wf_missing"
+        },
+        {
+          "id": "wf_save",
+          "type": "create",
+          "modelId": "model_0ebe91b0-2df8-4504-8eb9-6331c44abeb8",
+          "nextId": "wf_saved"
+        },
+        {
+          "id": "wf_saved",
+          "type": "message",
+          "text": "Customer created successfully.",
+          "nextId": ""
+        },
+        {
+          "id": "wf_missing",
+          "type": "message",
+          "text": "Enter a customer name before saving.",
+          "nextId": ""
+        }
+      ]
+    }
+  ]
+}
