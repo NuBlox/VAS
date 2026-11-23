@@ -40,7 +40,8 @@
   let importElement;
   let runtimeState=$state({enabled:false,projectId:'',revision:'',reason:'Local database runtime not configured'});
   let runtimeMode=$state('memory'),liveRecords=$state({}),selectedRecords=$state({}),busy=$state(false);
-  let runtimeReady=$derived(runtimeState.enabled&&runtimeState.projectId===project.id&&runtimeState.revision===projectRevision(project));
+  let loginId=$state(''),loginPassword=$state(''),authBusy=$state(false),auditVisible=$state(false),auditEvents=$state([]);
+  let runtimeReady=$derived(runtimeState.enabled&&runtimeState.authenticated&&runtimeState.projectId===project.id&&runtimeState.revision===projectRevision(project));
   let page=$derived(project.pages.find(p=>p.id===activeId)??project.pages[0]);
   let selected=$derived(findNodeLocation(page,selectedId)?.node);
   let activeModel=$derived(project.models.find(m=>m.id===activeModelId));
@@ -67,6 +68,31 @@
     }catch{runtimeState={enabled:false,projectId:'',revision:'',reason:'Runtime not available'};}
     hydrated=true;
   })();});
+
+  async function updateRuntimeStatus(){
+    const response=await fetch('/api/runtime',{cache:'no-store'});
+    if(!response.ok)throw new Error('Local runtime status unavailable');
+    runtimeState=await response.json();
+  }
+  async function login(){
+    if(authBusy)return;authBusy=true;notice='';
+    try {
+      const response=await fetch('/api/runtime/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:loginId,password:loginPassword})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error??'Sign-in failed');
+      loginPassword='';await updateRuntimeStatus();notice=`Signed in as ${data.actor.id} (${data.actor.role}).`;
+    }catch(e){loginPassword='';notice=`Sign-in failed: ${e.message}`;}finally{authBusy=false;}
+  }
+  async function logout(){
+    try {await fetch('/api/runtime/auth/logout',{method:'POST'});}
+    finally {runtimeMode='memory';liveRecords={};selectedRecords={};auditEvents=[];auditVisible=false;await updateRuntimeStatus();notice='Signed out of local MySQL runtime.';}
+  }
+  async function loadAudit(){
+    try {const response=await fetch('/api/runtime/audit',{headers:{'x-studio-project-id':project.id,'x-studio-project-revision':projectRevision(project)}});
+      const data=await response.json();if(!response.ok)throw new Error(data.error??'Audit log unavailable');
+      auditEvents=data.events;auditVisible=true;
+    }catch(e){notice=`Audit log: ${e.message}`;}
+  }
   $effect(()=>{if(hydrated)try{localStorage.setItem(STORE,JSON.stringify(project));}catch(e){notice='Browser autosave unavailable.';}});
 
   function change(fn){
@@ -214,7 +240,7 @@
   async function enterPreview(){mode='preview';selectedId='';notice='';if(runtimeMode==='mysql')await refreshLive();}
   async function chooseRuntime(value){
     runtimeMode=value;notice='';if(value==='mysql'){
-      if(!runtimeReady){runtimeMode='memory';notice='Your editor project differs from the published runtime, or MySQL is disabled. Export and publish the project to continue.';return;}
+      if(!runtimeReady){runtimeMode='memory';notice='Sign in and publish the same project revision before using local MySQL.';return;}
       await refreshLive();
     }
   }
@@ -403,7 +429,7 @@
 
 <div class="studio" class:workflow-view={tab==='workflows'}>
   <header class="topbar">
-    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · alpha 0.4</small></div></div>
+    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · alpha 0.6</small></div></div>
     <div class="project"><span class="status-dot"></span><input aria-label="Project name" value={project.name} onchange={e=>safe(p=>p.name=e.currentTarget.value)} /></div>
     <nav class="actions" aria-label="Project actions">
       <button onclick={undo} disabled={!previous.length} title="Undo">↶</button>
@@ -412,10 +438,34 @@
       <button onclick={exportProject} title="Save all project metadata">Save JSON</button>
       <button onclick={exportUI} title="Export selected page as Svelte markup">Export UI</button>
       <button onclick={exportSQL} title="Export generated MySQL DDL">Export SQL</button>
-      {#if runtimeState.enabled}<button onclick={loadPublished} title="Replace browser editor with locally published metadata">Load published</button>{/if}
+      {#if runtimeState.enabled&&runtimeState.authenticated}<button onclick={loadPublished} title="Replace browser editor with locally published metadata">Load published</button>{/if}
     </nav>
     <input class="hidden" type="file" accept="application/json,.json" bind:this={importElement} onchange={importProject} />
   </header>
+  {#if runtimeState.enabled}
+    <section class="auth-strip" aria-label="Local runtime account">
+      {#if runtimeState.authenticated}
+        <strong>{runtimeState.actor.id}</strong><span class="role-label">{runtimeState.actor.role}</span>
+        <span>Local MySQL access is protected by your role.</span>
+        {#if runtimeState.actor.role==='admin'}<button onclick={loadAudit}>Audit events</button>{/if}
+        <button onclick={logout}>Sign out</button>
+      {:else if runtimeState.authConfigured}
+        <form onsubmit={e=>{e.preventDefault();void login();}}>
+          <span>Sign in for local MySQL</span>
+          <input aria-label="Local username" autocomplete="username" placeholder="User ID" bind:value={loginId} required />
+          <input aria-label="Local password" type="password" autocomplete="current-password" placeholder="Password" bind:value={loginPassword} required />
+          <button disabled={authBusy}>{authBusy?'Signing in…':'Sign in'}</button>
+        </form>
+      {:else}<span>Create a local user with <code>npm run auth:user</code> before enabling MySQL access.</span>{/if}
+    </section>
+    {#if auditVisible&&runtimeState.actor?.role==='admin'}
+      <section class="audit-strip"><div><strong>Recent runtime audit events</strong><button onclick={()=>auditVisible=false}>Close</button></div>
+        <div class="audit-scroll"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Resource</th><th>Outcome</th></tr></thead><tbody>
+          {#each auditEvents as event (event.id)}<tr><td>{String(event.created_at)}</td><td>{event.actor_id}</td><td>{event.action}</td><td>{event.resource_type}: {event.resource_id}</td><td>{event.outcome}</td></tr>{:else}<tr><td colspan="5">No events</td></tr>{/each}
+        </tbody></table></div>
+      </section>
+    {/if}
+  {/if}
   <div class="workspace">
     <aside class="sidebar">
       <div class="workspace-switch"><button class:active={tab==='pages'} onclick={()=>tab='pages'}>Pages & tree</button><button class:active={tab==='data'} onclick={selectData}>Data models</button><button class:active={tab==='workflows'} onclick={()=>selectWorkflows()}>Workflows</button></div>

@@ -62,3 +62,13 @@
 .workflow-instructions strong{font-size:12px;color:#384f70}
 @media(max-width:900px){.studio.workflow-view .workspace{grid-template-columns:190px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 260px}.studio.workflow-view .inspector{display:block;grid-column:1/-1;max-height:260px;border-top:1px solid #e1e7f0}}
 @media(max-width:620px){.studio.workflow-view .workspace{display:flex;flex-direction:column}.studio.workflow-view .inspector{max-height:420px;min-height:220px}.studio.workflow-view .sidebar{max-height:170px}.workflow-intro{flex-wrap:wrap}.workflow-toolbar{align-items:stretch}.workflow-count{margin:0}}
+/* Alpha 0.6: local session controls and reviewable audit records */
+.auth-strip{display:flex;align-items:center;gap:10px;padding:9px 17px;background:#edf4ff;border-bottom:1px solid #d5e3fb;color:#385271;font-size:11px;min-height:49px;flex-wrap:wrap}
+.auth-strip form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.auth-strip input{border:1px solid #bbcef0;border-radius:6px;padding:7px 9px;font-size:11px;max-width:190px;background:#fff}
+.auth-strip button,.audit-strip button{border:1px solid #b8c9e5;border-radius:6px;background:#fff;color:#2456b5;padding:7px 11px;font-weight:700;font-size:11px}
+.auth-strip .role-label{background:#dce9ff;color:#2354aa;border-radius:4px;padding:4px 7px;font-weight:700;text-transform:capitalize}
+.auth-strip strong{font-size:12px}
+.audit-strip{padding:12px 17px;background:#fff;border-bottom:1px solid #e3eaf4;font-size:11px;color:#44546b}
+.audit-strip>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px}
+.audit-scroll{max-height:160px;overflow:auto}.audit-scroll table{width:100%;border-collapse:collapse}.audit-scroll th,.audit-scroll td{padding:6px 10px;text-align:left;border-bottom:1px solid #edf1f7}

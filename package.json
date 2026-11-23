@@ -1,7 +1,7 @@
 {
   "name": "visual-application-studio",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -10,6 +10,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
     "test": "node --test tests/*.test.mjs",
     "runtime:publish": "node scripts/publish-project.mjs",
+    "auth:user": "node scripts/local-user.mjs",
     "preview:generate": "node scripts/build-workflow-preview.mjs"
   },
   "devDependencies": {
