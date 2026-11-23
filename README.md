@@ -1,3 +1,32 @@
+# Visual Application Studio · Alpha 0.8 — Standalone Application Export
+
+VAS now includes a **standalone SvelteKit application exporter**. The command `npm run app:export -- --out ~/Developer/CustomerWorkspace` generates an independent app without the Studio editor, including its page renderer, local authenticated MySQL CRUD and workflow APIs, release verification, database DDL, and a migration review plan. Existing v0.7 capabilities remain unchanged.
+
+**Scope and safety:** the generated application is independently runnable and buildable but is **not approved for public hosting**. Its copied runtime intentionally blocks production and non-loopback access. Local accounts are not a replacement for federated production identity. No automatic database migrations or production deployment occur.
+
+## Standalone export quick start
+
+```bash
+# From NuBlox/VAS; Node 22.17+ required
+npm install
+npm run app:export -- --out ~/Developer/CustomerWorkspace
+cd ~/Developer/CustomerWorkspace
+npm install
+npm run verify:release
+npm test
+npm run check
+npm run build
+npm run dev -- --host 127.0.0.1 --open
+```
+
+To export an imported project JSON: `npm run app:export -- --project ./my.project.json --out ~/Developer/MyApp`. To export a known immutable Studio release: `npm run app:export -- --release <64-character-SHA256> --out ~/Developer/MyOldApp`. The exporter refuses existing target directories, invalid or duplicate URLs and mismatched release hashes. It does not execute arbitrary expressions, migrations or supplied JavaScript.
+
+The generated project has its own `package.json`, `src/` application shell, private local MySQL runtime, `runtime/project.json`, `release.json`, immutable `runtime/releases/` snapshot, `db/initial.mysql.sql`, audit and idempotency DDL, a `db/MIGRATION_PLAN.md` review checklist, and automated release tests. Navigate and preview layout without a database; sign in after configuring MySQL to use CRUD, table selection and workflows. The exporter validates and copies the published metadata, rather than creating an unverified deployment. CI builds the exported app separately.
+
+**Limitations:** the standalone UI uses metadata-based layout rendering; it is not yet a specialised Svelte source compiler for every component and custom code. It currently includes only loopback-local identity and MySQL; remote publishing, hosted authentication, secrets management, automated schema migrations and production deployment/rollback infrastructure remain future work.
+
+---
+
 # Visual Application Studio · Alpha 0.7 — Idempotent Workflows, Resource Policy & Versioned Publishing
 
 An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a local-only MySQL runtime, a visual workflow graph editor, and **transactional server-side workflow execution**. Alpha 0.6 builds on the transactional server-side workflow runtime introduced in v0.5.
