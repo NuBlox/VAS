@@ -25,7 +25,7 @@ test('exports independent, verifiable SvelteKit application with runtime routes 
   await assert.rejects(access(join(dest,'src/routes/+page.svelte.nonexistent')));
   await assert.rejects(access(join(dest,'src/routes/+page.svelte.from-editor')));
   assert.match((await readFile(join(dest,'scripts/deploy/core.mjs'),'utf8')),/promoteRelease/);
-  assert.match((await readFile(join(dest,'deployment/profiles/local.json'),'utf8')),/127\\.0\\.0\\.1/);
+  assert.equal((await readJSON(join(dest,'deployment/profiles/local.json'))).bindHost,'127.0.0.1');
   const generatedPackage=await readJSON(join(dest,'package.json'));
   assert.ok(generatedPackage.scripts['deploy:stage']);
   assert.equal(spawnSync(process.execPath,['scripts/verify-release.mjs'],{cwd:dest}).status,0);
