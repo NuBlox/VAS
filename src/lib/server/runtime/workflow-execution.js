@@ -11,6 +11,8 @@ import { RecordError, normaliseId, sqlFor } from '../../studio/records.js';
 import { getPublishedModel, getRecord, deleteRecord } from './store.js';
 import { canExecuteWorkflow } from './auth.js';
 import { writeAudit } from './audit.js';
+import { reserveWorkflowRequest, completeWorkflowRequest } from './idempotency.js';
+import { assertWorkflowPermission } from './policy.js';
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const FORM_TYPES = new Set(['input', 'textarea', 'checkbox', 'select']);
@@ -98,17 +100,26 @@ async function insertWithinTransaction(connection, model, statement) {
  * Execute a validated, published graph in one transaction. UI effects are only
  * returned after commit, so failed steps cannot leak partial success messages.
  */
-export async function executePublishedWorkflow({ project, workflowId, payload, db, actor = null }) {
+export async function executePublishedWorkflow({ project, workflowId, payload, db, actor = null, requestKey, policy }) {
   const invocation = validateWorkflowInvocation(project, workflowId, payload);
   const { flow, bindings, tables, context, confirmDelete } = invocation;
-  if(actor)canExecuteWorkflow(actor,flow);
+  if(actor){canExecuteWorkflow(actor,flow);assertWorkflowPermission(actor,flow,policy);}
   if (!db || typeof db.getConnection !== 'function') throw new RecordError('Database connection is unavailable', 503);
   const connection = await db.getConnection();
   const effects = [];
   let started = false;
+  let skipRejectedAudit = false;
   try {
     await connection.beginTransaction();
     started = true;
+    if (actor) {
+      const reservation = await reserveWorkflowRequest(connection,{project,workflowId,payload,actor,requestKey});
+      if (reservation.replay) {
+        await connection.rollback();
+        started = false;
+        return reservation.replay;
+      }
+    }
     const trace = await executeWorkflow(flow, context, {
       data: async (operation, modelId) => {
         if (operation === 'create') {
@@ -141,17 +152,23 @@ export async function executePublishedWorkflow({ project, workflowId, payload, d
       reset: async () => effects.push({type:'reset'}),
       setField: async (field, value) => effects.push({type:'set_field', field, value})
     });
-    if(actor)await writeAudit(connection,{actor,action:'workflow.execute',resourceType:'workflow',resourceId:flow.id,outcome:'committed',projectId:project.id});
+    const result = { trace, effects, committed: true, workflowId: flow.id };
+    if(actor) {
+      await writeAudit(connection,{actor,action:'workflow.execute',resourceType:'workflow',resourceId:flow.id,outcome:'committed',projectId:project.id});
+      await completeWorkflowRequest(connection,{project,actor,requestKey,result});
+    }
     await connection.commit();
-    return { trace, effects, committed: true, workflowId: flow.id };
+    started = false;
+    return result;
   } catch (error) {
+    skipRejectedAudit = error?.idempotencyConflict === true;
     if (started) {
       try { await connection.rollback(); } catch (rollbackError) {
         console.error('Workflow rollback failed', rollbackError);
         throw new RecordError('Workflow transaction rollback failed; inspect database state', 503);
       }
     }
-    if(actor)try{await writeAudit(connection,{actor,action:'workflow.execute',resourceType:'workflow',resourceId:flow.id,outcome:'rejected',projectId:project.id});}
+    if(actor && !skipRejectedAudit)try{await writeAudit(connection,{actor,action:'workflow.execute',resourceType:'workflow',resourceId:flow.id,outcome:'rejected',projectId:project.id});}
     catch(auditError){console.error('Failed to audit rejected workflow',auditError);}
     throw error;
   } finally {

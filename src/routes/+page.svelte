@@ -33,6 +33,7 @@
   let newStepType=$state('message');
   let newStepBranch=$state('true');
   let workflowTrace=$state([]);
+  let pendingWorkflowRequest=null; // Transient network retry state; not persisted across browser reloads.
   let mode=$state('design');
   let viewport=$state('desktop');
   let hydrated=$state(false);
@@ -271,14 +272,21 @@
           if(!runtimeReady)throw new Error('Publish this project to use MySQL workflows.');
           const includesDelete=workflow.steps.some(step=>step.type==='delete');
           if(includesDelete&&!confirm(`This workflow can delete records. Allow deletion if its delete step is reached?`))return;
-          // Only the published workflow ID and bounded form state cross the trust boundary.
+          // Keep the same request UUID and body after an uncertain network failure.
+          // Changing the form creates a new request. The server never trusts this key for authentication.
+          const requestBody=JSON.stringify({pageId:page.id,componentId:c.id,fields:{...fields},selectedRecords:{...selectedRecords},confirmDelete:includesDelete});
+          const requestFingerprint=JSON.stringify([workflow.id,projectRevision(project),requestBody]);
+          const requestKey=pendingWorkflowRequest?.fingerprint===requestFingerprint ? pendingWorkflowRequest.key : crypto.randomUUID();
+          pendingWorkflowRequest={fingerprint:requestFingerprint,key:requestKey};
           const response=await fetch(`/api/runtime/workflows/${encodeURIComponent(workflow.id)}`,{
-            method:'POST',headers:{'content-type':'application/json','x-studio-project-id':project.id,'x-studio-project-revision':projectRevision(project)},
-            body:JSON.stringify({pageId:page.id,componentId:c.id,fields:{...fields},selectedRecords:{...selectedRecords},confirmDelete:includesDelete})
+            method:'POST',headers:{'content-type':'application/json','x-studio-project-id':project.id,'x-studio-project-revision':projectRevision(project),'idempotency-key':requestKey},
+            body:requestBody
           });
           const result=await response.json();
           if(!response.ok)throw new Error(result.error??`Server returned HTTP ${response.status}`);
+          pendingWorkflowRequest=null;
           workflowTrace=result.trace;
+          if(result.replayed)notice='Original committed workflow response recovered; no duplicate database writes.';
           for(const effect of result.effects){
             if(effect.type==='navigate')selectPage(effect.pageId);
             else if(effect.type==='message')notice=effect.text;

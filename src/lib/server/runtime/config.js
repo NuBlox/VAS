@@ -1,4 +1,6 @@
 import published from '../../../../runtime/project.json' with { type:'json' };
+import manifest from '../../../../runtime/publication.json' with { type:'json' };
+import { validatePublication } from './publication.js';
 import { validateProject } from '#lib/studio/model.js';
 import { dev } from '$app/env';
 import { projectRevision } from '#lib/studio/revision.js';
@@ -6,6 +8,7 @@ import { error, json } from '@sveltejs/kit';
 import { currentActor, readLocalUsers, requireRole } from './auth.js';
 
 export const publishedProject=validateProject(published);
+export const activePublication=validatePublication(publishedProject,manifest);
 const localhost=new Set(['localhost','127.0.0.1','[::1]','::1']);
 const loopbackClients=new Set(['127.0.0.1','::1','::ffff:127.0.0.1']);
 export function runtimeStatus(event,env){
@@ -18,7 +21,7 @@ export function runtimeStatus(event,env){
   const configured=Boolean(env.DB_HOST&&env.DB_USER&&env.DB_NAME);
   const users=readLocalUsers();
   const actor=enabled&&configured?currentActor(event,users):null;
-  return {enabled:enabled&&configured,configured,local,authConfigured:Boolean(users),authenticated:Boolean(actor),actor:actor??null,projectId:publishedProject.id,projectName:publishedProject.name,revision:projectRevision(publishedProject),
+  return {enabled:enabled&&configured,configured,local,authConfigured:Boolean(users),authenticated:Boolean(actor),actor:actor??null,projectId:publishedProject.id,projectName:publishedProject.name,revision:projectRevision(publishedProject),releaseId:activePublication.releaseId,
     reason:!dev?'Production runtime blocked until authentication and authorisation are implemented':!local?'Use localhost to access the development runtime':env.ENABLE_LOCAL_RUNTIME!=='true'?'Set ENABLE_LOCAL_RUNTIME=true to enable local MySQL access':!configured?'DB_HOST, DB_USER and DB_NAME are required':''};
 }
 export function requireRuntime(event,env,mutation=false,role='viewer'){

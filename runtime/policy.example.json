@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "models": {
+    "model_customer": {
+      "read": ["viewer", "editor", "admin"],
+      "create": ["editor", "admin"],
+      "update": ["admin"],
+      "delete": ["admin"]
+    }
+  },
+  "workflows": {
+    "workflow_create_customer": ["editor", "admin"]
+  }
+}
