@@ -2,6 +2,7 @@
 import { RecordError, sqlFor, normaliseId } from '../../studio/records.js';
 import { getRecord } from './store.js';
 import { requireRole } from './auth.js';
+import { assertModelPermission } from './policy.js';
 const actions = new Set(['model.create','model.update','model.delete','workflow.execute']);
 const outcomes = new Set(['committed','rejected']);
 export async function writeAudit(connection,{actor,action,resourceType,resourceId,outcome,projectId}) {
@@ -30,9 +31,10 @@ export async function listAudit(db,{before,limit=50}={}) {
   return rows;
 }
 /** Single-transaction direct CRUD with an append-only audit event before commit. */
-export async function executeAuditedMutation({db,project,model,operation,payload,id,actor}) {
+export async function executeAuditedMutation({db,project,model,operation,payload,id,actor,policy=null}) {
   const role=operation==='delete'?'admin':'editor';
   requireRole(actor,role);
+  assertModelPermission(actor,model.id,operation,policy);
   if(!['create','update','delete'].includes(operation))throw new RecordError('Invalid mutation');
   const action=`model.${operation}`;
   const audit={actor,action,resourceType:'model',resourceId:model.id,projectId:project.id};

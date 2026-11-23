@@ -1,10 +1,45 @@
-# Visual Application Studio · Alpha 0.6 — Local Authentication, Roles & Audit
+# Visual Application Studio · Alpha 0.7 — Idempotent Workflows, Resource Policy & Versioned Publishing
 
 An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a local-only MySQL runtime, a visual workflow graph editor, and **transactional server-side workflow execution**. Alpha 0.6 builds on the transactional server-side workflow runtime introduced in v0.5.
 
 **Status:** functional LOCAL prototype, **not production ready**. Version 0.6 adds local sign-in, basic role-based access control and MySQL audit records, but does **not** provide multi-tenant identity management, hosted deployment, secure TLS termination, account recovery, cross-process session storage, enterprise policy management or production hardening. All MySQL routes remain disabled outside loopback development. Browser-memory preview works without sign-in or a database. Do not expose this tool publicly or use real personal/customer records.
 
-## New in Alpha 0.6
+## New in Alpha 0.7 — safely replayable workflow submissions
+
+**Scope:** This release adds three complementary **local-development** safeguards; it does not enable internet hosting or production identity management.
+
+1. **Transactional idempotency:** every authenticated workflow POST requires a UUIDv4 `Idempotency-Key` header. The server saves the request fingerprint and successful response in `visual_studio_audit.vas_workflow_requests`. The reservation, database mutations, audit record and saved result are committed together on the same MySQL connection. Concurrent duplicate requests are serialised by MySQL's unique key and replay the original result without executing the workflow again. Reusing the key for a changed payload, revision or workflow returns HTTP 409. Failed transactions remove their reservation automatically. **Apply the additive `runtime/idempotency.mysql.sql` schema before enabling v0.7 MySQL workflows.**
+2. **Deny-only resource policy:** optional `.vas/policy.local.json` restricts model `read`/`create`/`update`/`delete` and named workflow access for specific roles. The policy can only remove rights, never extend the built-in role hierarchy. A malformed policy blocks resource requests rather than becoming permissive. Example: `runtime/policy.example.json`; to enable it, run `cp runtime/policy.example.json .vas/policy.local.json` after creating `.vas/` and edit for your users.
+3. **Immutable publication snapshots:** each publish creates a SHA-256-addressed file in `runtime/releases/`, updates the active project and generated SQL, and writes `runtime/publication.json` **last**. The server refuses to start if the manifest no longer matches the published application. The `--dry-run` flag remains supported; changing the data model requires explicit `--allow-schema-change` after reviewing migrations. The publisher **never executes DDL** and still requires restarting the server.
+
+### Upgrade the MySQL development database from v0.6
+
+Run from `~/Developer/VAS` as an **administrative** MySQL user; this is an additive table creation, not a change to business data:
+
+```bash
+mysql -u root -p < runtime/idempotency.mysql.sql
+```
+
+The VAS app user needs `SELECT`, `INSERT` and `UPDATE` on the new ledger table (only), with no DELETE or schema privileges. For an existing user named `visual_studio_dev`:
+
+```sql
+GRANT SELECT, INSERT, UPDATE ON `visual_studio_audit`.`vas_workflow_requests` TO 'visual_studio_dev'@'127.0.0.1';
+```
+
+Run that grant through your MySQL administrative account. Keep the audit-events table restricted to `SELECT`/`INSERT`. On a brand-new installation, create the `visual_studio_audit` database first, then apply **both** `runtime/audit.mysql.sql` and `runtime/idempotency.mysql.sql`. Do not apply the example business schema to an existing database. CI provisions an ephemeral MySQL server and verifies commit, rollback, retry, collision and concurrent replay behaviour.
+
+**Retry behaviour:** the integrated editor reuses a request key when the same browser session retries an identical workflow input after an uncertain network result. A changed form state creates a new key. The retry key is transient, not persisted across page reloads; callers writing their own clients must durably retain a key until they know the outcome. Direct CRUD endpoints are **not** idempotent yet. Old clients must be upgraded to send the header.
+
+**Publishing a revised model:**
+
+```bash
+npm run runtime:publish -- ~/Downloads/application.project.json --dry-run
+npm run runtime:publish -- ~/Downloads/application.project.json --allow-schema-change
+```
+
+Only supply `--allow-schema-change` after making a backup and preparing/reviewing the actual SQL migration. The publisher writes suggested DDL, **not a migration**. Check in the active manifest and release snapshot along with the published project. The original eight-character editor revision is retained for UI compatibility; the 64-character SHA-256 release ID provides the immutable snapshot identity.
+
+## Previous release: Alpha 0.6
 
 - **Opt-in local accounts** with Node scrypt-derived password hashes in Git-ignored `.vas/users.local.json` (never plaintext passwords in Git).
 - **Opaque HTTP-only, SameSite=Strict session cookies**, four-hour expiry, server-memory revocation on sign-out; identities and roles are checked against the local user file on each request. Sessions do **not** survive a server restart.
@@ -140,6 +175,10 @@ src/routes/api/runtime/        authenticated local project, CRUD, workflow, sign
 runtime/project.json           published customer workspace with sample visual workflow
 runtime/schema.mysql.sql       example business schema, NOT a migration
 runtime/audit.mysql.sql        separate append-only audit table migration
+runtime/idempotency.mysql.sql   additive transactional replay ledger DDL
+runtime/policy.example.json     example server-owned resource restrictions
+runtime/publication.json       active immutable release manifest
+runtime/releases/              SHA-256-addressed published project snapshots
 scripts/local-user.mjs        creates/updates a local user using a scrypt password hash
 scripts/publish-project.mjs    local snapshot publisher (validates but never runs SQL)
 preview/workflows.html         self-contained dependency-free interactive workflow demo
@@ -161,4 +200,4 @@ Workflow steps are declarative JSON. The interpreter never evaluates user-author
 
 ## Next engineering work
 
-Production-grade identity federation, multi-user/team project administration, role and permission policies per resource, durable cross-process sessions, audit retention/tamper detection, idempotent submissions, and service-level observability; then versioned application publishing, richer expressions/variables, and hosted packaging. **Do not expose the development runtime to the network.** This prototype must remain on loopback; never expose the dev runtime through a public tunnel, reverse proxy or LAN binding, and do not store actual customer data in it.
+Production-grade identity federation, multi-user/team project administration, role and permission policies per resource, durable cross-process sessions, audit retention/tamper detection, distributed session storage, administrative authentication, idempotent direct CRUD endpoints, audit retention, deployment rollback, and service-level observability; then richer expressions/variables, and hosted packaging. **Do not expose the development runtime to the network.** This prototype must remain on loopback; never expose the dev runtime through a public tunnel, reverse proxy or LAN binding, and do not store actual customer data in it.
