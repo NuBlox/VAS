@@ -45,3 +45,12 @@ jobs:
         run: npm run check
       - name: Production build
         run: npm run build
+      - name: Generate and verify independent SvelteKit application
+        run: |
+          npm run app:export -- --out "$RUNNER_TEMP/vas-standalone"
+          cd "$RUNNER_TEMP/vas-standalone"
+          npm install
+          npm run verify:release
+          npm test
+          npm run check
+          npm run build

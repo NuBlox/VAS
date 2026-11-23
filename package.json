@@ -1,7 +1,7 @@
 {
   "name": "visual-application-studio",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -11,7 +11,8 @@
     "test": "node --test tests/*.test.mjs",
     "runtime:publish": "node scripts/publish-project.mjs",
     "auth:user": "node scripts/local-user.mjs",
-    "preview:generate": "node scripts/build-workflow-preview.mjs"
+    "preview:generate": "node scripts/build-workflow-preview.mjs",
+    "app:export": "node scripts/export-application.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^9.0.0",
