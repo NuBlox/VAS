@@ -112,7 +112,7 @@ tests/                         model, records, workflow and security-invariant t
 .github/workflows/ci.yml       PR and main test/check/build validation
 ```
 
-Workflow steps are declarative JSON. The interpreter never evaluates user-authored JavaScript or accepts arbitrary SQL. Server CRUD checks origin for writes, published model and project revision consistency, validates field types and field names, and parameterises values. The revision header is **not authentication**. Flow changes and branch decisions are **client-side only**. Server-side MySQL workflow actions now share one transaction: failed steps roll back earlier writes. Direct one-step CRUD buttons remain available. The demo workflow that runs without MySQL is a browser-only simulation.
+Workflow steps are declarative JSON. The interpreter never evaluates user-authored JavaScript or accepts arbitrary SQL. Server CRUD checks origin for writes, published model and project revision consistency, validates field types and field names, and parameterises values. The revision header is **not authentication**. In **MySQL mode**, workflow branch decisions are made on the server using the published graph; offline-memory preview remains client-interpreted. Server-side MySQL workflow actions now share one transaction: failed steps roll back earlier writes. Direct one-step CRUD buttons remain available. The demo workflow that runs without MySQL is a browser-only simulation.
 
 ## Verification
 
