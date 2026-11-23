@@ -6,8 +6,13 @@ import { error, json } from '@sveltejs/kit';
 
 export const publishedProject=validateProject(published);
 const localhost=new Set(['localhost','127.0.0.1','[::1]','::1']);
+const loopbackClients=new Set(['127.0.0.1','::1','::ffff:127.0.0.1']);
 export function runtimeStatus(event,env){
-  const local=localhost.has(event.url.hostname);
+  // Hostname alone is insufficient: remote callers can forge Host/Origin headers.
+  // Fail closed if the adapter cannot establish the peer address.
+  let clientAddress='';
+  try{clientAddress=event.getClientAddress();}catch{ /* do not allow unchecked peers */ }
+  const local=localhost.has(event.url.hostname)&&loopbackClients.has(clientAddress);
   const enabled=dev&&local&&env.ENABLE_LOCAL_RUNTIME==='true';
   const configured=Boolean(env.DB_HOST&&env.DB_USER&&env.DB_NAME);
   return {enabled:enabled&&configured,configured,local,projectId:publishedProject.id,projectName:publishedProject.name,revision:projectRevision(publishedProject),

@@ -1,8 +1,19 @@
-# Visual Application Studio · Alpha 0.4 — Visual Workflow Designer
+# Visual Application Studio · Alpha 0.5 — Server Workflow Transactions
 
-An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a **local-only MySQL CRUD development runtime**, and now a **visual workflow graph editor**. Alpha 0.4 implements the next milestone after the 0.3 CRUD release.
+An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with visual UI components, hierarchical layouts, a relational data modeller, a local-only MySQL runtime, a visual workflow graph editor, and **transactional server-side workflow execution**. Alpha 0.5 builds on the Alpha 0.4 workflow designer.
 
-**Status:** functional prototype; **not production ready**. There is no authentication, RBAC, tenancy, hosted deployment, or server-side workflow enforcement. The visual workflow engine runs **in the browser** and invokes existing local development API endpoints for database steps. Production use requires an authenticated server execution runtime and server-side policies. This is not a general-purpose executable scripting platform.
+**Status:** functional prototype; **not production ready**. There is no authentication, RBAC, tenancy or hosted deployment. MySQL-mode workflows now execute server-side using **published** metadata and a single transaction, but this is still a localhost-only developer tool, **not an authenticated production backend**. Browser-memory preview continues to simulate workflows without a database. This is not a general-purpose scripting platform.
+
+## New in Alpha 0.5
+
+- New `POST /api/runtime/workflows/:workflowId` endpoint executes only server-published workflow definitions, checking the original page and button trigger, published revision, loopback peer address and same-origin request.
+- **Single-connection MySQL transactions:** the entire selected workflow branch commits atomically; a failed later step rolls back all earlier CRUD steps.
+- Strict runtime form binding: incoming field names must exist on the workflow's page; selected IDs must belong to tables shown on that page; all SQL remains parameterised from allowlisted models.
+- `set_field`, conditions, CRUD, navigation, messages and form reset are executed in workflow order on the server; navigation/messages are returned as UI effects **only after commit**.
+- A delete step requires the user's confirmation, enforced by the server; neither a revision header nor a confirmation flag is authentication.
+- Browser MySQL preview uses the server workflow route; the offline-memory preview remains browser-interpreted, for demonstration only.
+- Transaction-aware unit tests cover commit, rollback, negative cases and forged input; CI provisions an ephemeral MySQL 8 service to verify an actual commit and a duplicate-key rollback.
+- The schema remains version 3; no database migration is required for workflow execution. Existing published projects need no republishing unless their metadata changes.
 
 ## New in Alpha 0.4
 
@@ -12,7 +23,7 @@ An independent, metadata-driven SvelteKit 3/Svelte 5 application builder with vi
 - Declarative steps for `condition`, `create`, `update`, `delete`, `navigate`, `message`, `reset`, `set_field` and `stop`.
 - Conditions: filled, empty, equals, not-equals, numeric greater/less than, or a selected model record.
 - Insert a node into an existing path, reconnect targets, delete a single-route node, and configure actions from the inspector. Unreachable steps, broken references and cycles are rejected.
-- Browser preview executes workflows sequentially, reports an execution trace, and supports in-memory record creation. With the published local MySQL runtime enabled, workflows can invoke create, update and delete operations against the previously established CRUD API.
+- Browser preview executes workflows sequentially, reports an execution trace, and supports in-memory record creation. With the published local MySQL runtime enabled, workflows execute server-side in one transaction, while the memory-only demo remains browser-interpreted.
 - **Schema v3**: v1 and v2 project JSON automatically migrate in memory, retaining their pages, components and models; migrated projects start without inferred workflows. Browser-autosaved projects also migrate.
 - The published-project revision now includes workflow definitions; changes require re-publishing and restarting the runtime before MySQL preview resumes.
 - Sample customer workflow: `name is filled?` → `Create Customer` → success message; otherwise show a missing-name message.
@@ -78,7 +89,7 @@ npm run runtime:publish -- ~/Downloads/application.project.json
 npm run dev -- --host 127.0.0.1 --open
 ```
 
-The publisher reads and validates schema v1/v2/v3 project JSON, writes `runtime/project.json` and reviewable `runtime/schema.mysql.sql`, **does not execute SQL**, and requires a server restart to load the new published snapshot. Export the editor project with **Save JSON** first. The local preview refuses MySQL operations when project ID/revision differs from the server snapshot.
+The publisher reads and validates schema v1/v2/v3 project JSON, writes `runtime/project.json` and reviewable `runtime/schema.mysql.sql`, **does not execute SQL**, and requires a server restart to load the new published snapshot. Export the editor project with **Save JSON** first. The local preview refuses MySQL operations when project ID/revision differs from the server snapshot. The workflow endpoint also checks the published trigger and executes the published graph, not a client-supplied graph.
 
 ## Architecture
 
@@ -88,9 +99,9 @@ src/lib/studio/workflow.js      workflow definitions, graph integrity, interpret
 src/lib/studio/records.js       shared field validation and parameterised CRUD SQL
 src/lib/studio/compiler.js      UI-only Svelte markup and reviewable MySQL DDL exporters
 src/lib/studio/revision.js      published metadata consistency fingerprint
-src/lib/server/runtime/        localhost gate, allowlisted MySQL driver and CRUD store
+src/lib/server/runtime/        loopback gate, MySQL driver, CRUD store, transactional workflow engine
 src/routes/+page.svelte         complete page/data/workflow builder and preview interactions
-src/routes/api/runtime/        development-only published-project and CRUD endpoints
+src/routes/api/runtime/        development-only published-project, CRUD and workflow endpoints
 runtime/project.json           published customer workspace with sample visual workflow
 runtime/schema.mysql.sql       example development schema, NOT a migration
 scripts/publish-project.mjs    local snapshot publisher (validates but never runs SQL)
@@ -101,16 +112,16 @@ tests/                         model, records, workflow and security-invariant t
 .github/workflows/ci.yml       PR and main test/check/build validation
 ```
 
-Workflow steps are declarative JSON. The interpreter never evaluates user-authored JavaScript or accepts arbitrary SQL. Server CRUD checks origin for writes, published model and project revision consistency, validates field types and field names, and parameterises values. The revision header is **not authentication**. Flow changes and branch decisions are **client-side only**. A series of database actions is **not transactional**: a failed later step will not roll back an earlier successful step.
+Workflow steps are declarative JSON. The interpreter never evaluates user-authored JavaScript or accepts arbitrary SQL. Server CRUD checks origin for writes, published model and project revision consistency, validates field types and field names, and parameterises values. The revision header is **not authentication**. In **MySQL mode**, workflow branch decisions are made on the server using the published graph; offline-memory preview remains client-interpreted. Server-side MySQL workflow actions now share one transaction: failed steps roll back earlier writes. Direct one-step CRUD buttons remain available. The demo workflow that runs without MySQL is a browser-only simulation.
 
 ## Verification
 
-- **27/27** dependency-free Node tests pass: original designer/DDL, CRUD test doubles, v1/v2 migration, graph validation (including cycle/orphan prevention), conditions, sequential execution, failure propagation and revision integrity.
+- **35/35** dependency-free Node unit tests pass (plus one opt-in MySQL integration test): original designer/DDL, CRUD test doubles, v1/v2 migration, graph validation (including cycle/orphan prevention), conditions, sequential execution, failure propagation and revision integrity.
 - Workflow demo has been exercised in Chromium using both true/false paths, memory record creation and connected step insertion. The demo does not perform live database requests.
 - `node --check` passes for all standalone JavaScript modules and the extracted page `<script>`.
-- `npm install` could not reach `registry.npmjs.org` in the local build environment (`EAI_AGAIN`). GitHub Actions validates dependency installation, `npm run check` and the production build; a real MySQL connection still requires a configured local database. Run the commands above on your Mac and resolve any resulting dependency/compiler issues before treating the integrated builder as validated.
+- Local `npm install` could not reach `registry.npmjs.org` (`EAI_AGAIN`). GitHub Actions validates dependency installation, the real MySQL transaction test, `npm run check` and the production build. Run the commands on your Mac to validate your own database instance.
 - Source is maintained in NuBlox/VAS. The GitHub Actions workflow runs tests, type analysis and the production build on pull requests and main.
 
 ## Next engineering work
 
-Server-side authenticated workflow execution, transaction/compensation policies for multi-step database operations, workflow versioning and audit logs, richer expression/variable modelling, and publishable hosted application packages. This prototype must remain on loopback; never expose the dev runtime through a public tunnel, reverse proxy or LAN binding, and do not store actual customer data in it.
+Production authentication, role/permission policies for workflow actions, persistent audit logging and idempotent submission safeguards; then versioned application publishing, richer expressions/variables, and hosted application packaging. **Do not expose the development runtime to the network.** This prototype must remain on loopback; never expose the dev runtime through a public tunnel, reverse proxy or LAN binding, and do not store actual customer data in it.

@@ -12,6 +12,19 @@ permissions:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_ephemeral_password
+          MYSQL_DATABASE: visual_studio_dev
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,7 +32,14 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install
-      - name: Unit tests
+      - name: Unit and MySQL transaction tests
+        env:
+          MYSQL_INTEGRATION: '1'
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: visual_studio_dev
+          DB_USER: root
+          DB_PASSWORD: ci_ephemeral_password
         run: npm test
       - name: Svelte static analysis
         run: npm run check
