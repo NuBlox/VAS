@@ -241,33 +241,44 @@
       if(busy)return;
       busy=true;workflowTrace=[];notice='';
       try{
-        const trace=await executeWorkflow(workflow,{fields:{...fields},selectedRecords:{...selectedRecords}}, {
-          data:async(operation,modelId)=>{
-            const model=project.models.find(m=>m.id===modelId);if(!model)throw new Error('Workflow model is missing');
-            if(runtimeMode!=='mysql'){
+        if(runtimeMode==='mysql'){
+          if(!runtimeReady)throw new Error('Publish this project to use MySQL workflows.');
+          const includesDelete=workflow.steps.some(step=>step.type==='delete');
+          if(includesDelete&&!confirm(`This workflow can delete records. Allow deletion if its delete step is reached?`))return;
+          // Only the published workflow ID and bounded form state cross the trust boundary.
+          const response=await fetch(`/api/runtime/workflows/${encodeURIComponent(workflow.id)}`,{
+            method:'POST',headers:{'content-type':'application/json','x-studio-project-id':project.id,'x-studio-project-revision':projectRevision(project)},
+            body:JSON.stringify({pageId:page.id,componentId:c.id,fields:{...fields},selectedRecords:{...selectedRecords},confirmDelete:includesDelete})
+          });
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.error??`Server returned HTTP ${response.status}`);
+          workflowTrace=result.trace;
+          for(const effect of result.effects){
+            if(effect.type==='navigate')selectPage(effect.pageId);
+            else if(effect.type==='message')notice=effect.text;
+            else if(effect.type==='reset'){fields={};selectedRecords={};}
+            else if(effect.type==='set_field')fields={...fields,[effect.field]:effect.value};
+            else if(effect.type==='data'){
+              if(effect.operation==='delete')selectedRecords={...selectedRecords,[effect.modelId]:''};
+              if(effect.operation==='create')selectedRecords={...selectedRecords,[effect.modelId]:effect.id};
+            }
+          }
+          if(!notice)notice='Server workflow committed successfully.';
+          await refreshLive();
+        }else{
+          const trace=await executeWorkflow(workflow,{fields:{...fields},selectedRecords:{...selectedRecords}}, {
+            data:async(operation,modelId)=>{
+              const model=project.models.find(m=>m.id===modelId);if(!model)throw new Error('Workflow model is missing');
               if(operation!=='create')throw new Error('Update and delete workflows require MySQL (local).');
-              const value=payloadForModel(model,'create');records={...records,[page.id]:[...(records[page.id]??[]),value]};return;
-            }
-            if(!runtimeReady)throw new Error('Publish this project to use MySQL workflows.');
-            const id=selectedRecords[modelId];
-            if(operation==='create')await requestRecords(modelId,'POST','',payloadForModel(model,'create'));
-            if(operation==='update'){
-              if(!id)throw new Error('Select a record in the data table to update.');
-              await requestRecords(modelId,'PATCH',id,payloadForModel(model,'update'));
-            }
-            if(operation==='delete'){
-              if(!id)throw new Error('Select a record in the data table to delete.');
-              if(!confirm(`Delete ${model.name} record ${id}?`))throw new Error('Deletion cancelled.');
-              await requestRecords(modelId,'DELETE',id);selectedRecords={...selectedRecords,[modelId]:''};
-            }
-            await refreshLive();
-          },
-          navigate:async pageId=>selectPage(pageId),
-          message:async text=>{notice=text;},
-          reset:async()=>{fields={};selectedRecords={};},
-          setField:async(field,value)=>{fields={...fields,[field]:value};}
-        });
-        workflowTrace=trace;
+              const value=payloadForModel(model,'create');records={...records,[page.id]:[...(records[page.id]??[]),value]};
+            },
+            navigate:async pageId=>selectPage(pageId),
+            message:async text=>{notice=text;},
+            reset:async()=>{fields={};selectedRecords={};},
+            setField:async(field,value)=>{fields={...fields,[field]:value};}
+          });
+          workflowTrace=trace;
+        }
       }catch(e){notice=`Workflow: ${e.message}`;}finally{busy=false;}
       return;
     }
