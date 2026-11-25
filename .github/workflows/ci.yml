@@ -54,7 +54,10 @@ jobs:
           npm test
           npm run check
           npm run build
-          npm run deploy:stage -- --store "$RUNNER_TEMP/vas-release-store"
+          mkdir -p "$RUNNER_TEMP/vas-signer"
+          npm run deploy:keygen -- --private-key "$RUNNER_TEMP/vas-signer/private.pem" --public-key "$RUNNER_TEMP/vas-signer/public.pem"
+          npm run deploy:stage -- --store "$RUNNER_TEMP/vas-release-store" --signing-key "$RUNNER_TEMP/vas-signer/private.pem"
           RELEASE_ID=$(node -p "JSON.parse(require('fs').readFileSync('release.json','utf8')).releaseId")
-          npm run deploy:promote -- --store "$RUNNER_TEMP/vas-release-store" --env local --release "$RELEASE_ID" --expect none --profile deployment/profiles/local.json
-          npm run deploy:status -- --store "$RUNNER_TEMP/vas-release-store" --env local
+          npm run deploy:promote -- --store "$RUNNER_TEMP/vas-release-store" --env local --release "$RELEASE_ID" --expect none --profile deployment/profiles/local.json --trusted-key "$RUNNER_TEMP/vas-signer/public.pem"
+          npm run deploy:activate -- --store "$RUNNER_TEMP/vas-release-store" --env local --release "$RELEASE_ID" --profile deployment/profiles/local.json --trusted-key "$RUNNER_TEMP/vas-signer/public.pem"
+          npm run deploy:status -- --store "$RUNNER_TEMP/vas-release-store" --env local --trusted-key "$RUNNER_TEMP/vas-signer/public.pem"
