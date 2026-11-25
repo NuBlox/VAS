@@ -61,3 +61,13 @@ jobs:
           npm run deploy:promote -- --store "$RUNNER_TEMP/vas-release-store" --env local --release "$RELEASE_ID" --expect none --profile deployment/profiles/local.json --trusted-key "$RUNNER_TEMP/vas-signer/public.pem"
           npm run deploy:activate -- --store "$RUNNER_TEMP/vas-release-store" --env local --release "$RELEASE_ID" --profile deployment/profiles/local.json --trusted-key "$RUNNER_TEMP/vas-signer/public.pem"
           npm run deploy:status -- --store "$RUNNER_TEMP/vas-release-store" --env local --trusted-key "$RUNNER_TEMP/vas-signer/public.pem"
+      - name: Compile standalone application with typed component bindings and named content slots
+        run: |
+          node scripts/generate-composition-fixture.mjs "$RUNNER_TEMP/vas-composed-project.json"
+          npm run app:export -- --project "$RUNNER_TEMP/vas-composed-project.json" --out "$RUNNER_TEMP/vas-composed"
+          cd "$RUNNER_TEMP/vas-composed"
+          npm install
+          npm run verify:release
+          npm test
+          npm run check
+          npm run build
