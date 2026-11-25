@@ -1,11 +1,12 @@
 <script>
   import '../app.css';
   import { onMount } from 'svelte';
-  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes } from '#lib/studio/model.js';
+  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes, saveComponentTemplate, insertComponentTemplate, deleteComponentTemplate } from '#lib/studio/model.js';
   import { exportPageToSvelte, exportMySQL } from '#lib/studio/compiler.js';
   import { projectRevision } from '#lib/studio/revision.js';
   import { validateRecord } from '#lib/studio/records.js';
   import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow } from '#lib/studio/workflow.js';
+  import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug } from '#lib/studio/debugger.js';
 
   const STORE='visual-application-studio-v1';
   const properties={
@@ -33,6 +34,10 @@
   let newStepType=$state('message');
   let newStepBranch=$state('true');
   let workflowTrace=$state([]);
+  let templateName=$state('');
+  let debugInputs=$state({});
+  let debugSelectedRecords=$state({});
+  let debugSession=$state(null);
   let pendingWorkflowRequest=null; // Transient network retry state; not persisted across browser reloads.
   let mode=$state('design');
   let viewport=$state('desktop');
@@ -57,14 +62,14 @@
 
   onMount(()=>{void (async()=>{
     let saved=false;
-    try {const raw=localStorage.getItem(STORE);if(raw){project=validateProject(migrateProject(JSON.parse(raw)));saved=true;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}}
+    try {const raw=localStorage.getItem(STORE);if(raw){project=validateProject(migrateProject(JSON.parse(raw)));debugSession=null;saved=true;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}}
     catch(e){notice=`Unable to restore project: ${e.message}`;}
     try {
       const response=await fetch('/api/runtime');
       if(response.ok)runtimeState=await response.json();
       if(runtimeState.enabled&&!saved){
         const published=await fetch('/api/runtime/project');
-        if(published.ok){project=validateProject(migrateProject(await published.json()));activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}
+        if(published.ok){project=validateProject(migrateProject(await published.json()));debugSession=null;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}
       }
     }catch{runtimeState={enabled:false,projectId:'',revision:'',reason:'Runtime not available'};}
     hydrated=true;
@@ -98,14 +103,14 @@
 
   function change(fn){
     const next=cloneProject(project);fn(next);validateProject(next);
-    previous=[...previous.slice(-39),cloneProject(project)];upcoming=[];project=next;
+    previous=[...previous.slice(-39),cloneProject(project)];upcoming=[];project=next;debugSession=null;
   }
   function safe(fn){try{change(fn);notice='';}catch(e){notice=e.message;}}
-  function undo(){if(!previous.length)return;upcoming=[...upcoming,cloneProject(project)];project=previous.at(-1);previous=previous.slice(0,-1);selectedId='';activeFieldId='';}
-  function redo(){if(!upcoming.length)return;previous=[...previous,cloneProject(project)];project=upcoming.at(-1);upcoming=upcoming.slice(0,-1);selectedId='';activeFieldId='';}
+  function undo(){if(!previous.length)return;upcoming=[...upcoming,cloneProject(project)];project=previous.at(-1);previous=previous.slice(0,-1);selectedId='';activeFieldId='';debugSession=null;}
+  function redo(){if(!upcoming.length)return;previous=[...previous,cloneProject(project)];project=upcoming.at(-1);upcoming=upcoming.slice(0,-1);selectedId='';activeFieldId='';debugSession=null;}
   function selectPage(id){tab='pages';activeId=id;selectedId='';fields={};notice='';if(runtimeMode==='mysql')void refreshLive();}
   function selectData(){tab='data';mode='design';selectedId='';activeModelId=project.models[0]?.id??'';activeFieldId='';notice='';}
-  function selectWorkflows(id=activeWorkflowId){tab='workflows';mode='design';selectedId='';activeWorkflowId=id||project.workflows[0]?.id||'';activeStepId=project.workflows.find(w=>w.id===activeWorkflowId)?.startStepId??'';notice='';}
+  function selectWorkflows(id=activeWorkflowId){tab='workflows';mode='design';selectedId='';activeWorkflowId=id||project.workflows[0]?.id||'';activeStepId=project.workflows.find(w=>w.id===activeWorkflowId)?.startStepId??'';debugSession=null;debugInputs={};debugSelectedRecords={};notice='';}
   function createWorkflowFromButton(pageId=activeId,componentId=''){
     const trigger=componentId?{pageId,componentId}:allTriggers.find(t=>!project.workflows.some(w=>w.trigger.pageId===t.pageId&&w.trigger.componentId===t.id));
     if(!trigger){notice='Add an unassigned button to a page before creating another workflow.';return;}
@@ -162,6 +167,34 @@
     if(s.type==='set_field')return `${s.field} = ${s.value}`;
     return s.type==='reset'?'Clear current form':'End';
   }
+  function beginDebugSession(){
+    if(!activeWorkflow)return;
+    try{debugSession=startWorkflowDebug(activeWorkflow,{fields:debugInputs,selectedRecords:debugSelectedRecords});activeStepId=activeWorkflow.startStepId;notice='';}
+    catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function stepDebug(){
+    if(!activeWorkflow||!debugSession)return;
+    try{const next=stepWorkflowDebug(activeWorkflow,debugSession);debugSession=next;activeStepId=next.trace.at(-1)?.stepId??activeStepId;}
+    catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function finishDebug(){
+    if(!activeWorkflow||!debugSession)return;
+    try{const next=finishWorkflowDebug(activeWorkflow,debugSession);debugSession=next;activeStepId=next.trace.at(-1)?.stepId??activeStepId;}
+    catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function saveSelectedTemplate(){
+    if(!selected)return;
+    const name=templateName.trim()||selected.props.title||selected.props.text||CATALOG.find(x=>x.type===selected.type)?.label||selected.type;
+    let saved;
+    safe(p=>{const current=findNodeLocation(p.pages.find(pg=>pg.id===activeId),selectedId)?.node;if(!current)throw new Error('Select a component');saved=saveComponentTemplate(p,current,name);});
+    if(saved&&!notice){templateName='';notice=`Saved “${saved.name}” to the reusable component library.`;}
+  }
+  function insertSavedTemplate(id,parentId='',index){
+    let inserted;
+    safe(p=>{inserted=insertComponentTemplate(p,id,activeId,parentId,index);});
+    if(inserted&&!notice){selectedId=inserted.id;mode='design';notice='Reusable component inserted with fresh IDs. Button workflows are not copied.';}
+  }
+  function deleteSavedTemplate(id){safe(p=>deleteComponentTemplate(p,id));}
   function addPage(){const id=createId('page');change(p=>p.pages.push({id,name:`New page ${p.pages.length+1}`,path:`/page-${p.pages.length+1}`,components:[createComponent('heading')]}));selectPage(id);}
   function deletePage(){if(project.pages.length<2)return;change(p=>{p.pages=p.pages.filter(x=>x.id!==activeId);});selectPage(project.pages[0].id);}
   function addComponent(type,parentId='',index){
@@ -198,6 +231,7 @@
   function onDrop(e,parentId,index){e.preventDefault();e.stopPropagation();if(mode!=='design'||tab!=='pages')return;
     const tag=e.dataTransfer?.getData('text/plain')??'';
     if(tag.startsWith('new:')){const type=tag.slice(4);if(CATALOG.some(c=>c.type===type))addComponent(type,parentId,index);}
+    else if(tag.startsWith('template:'))insertSavedTemplate(tag.slice(9),parentId,index);
     else if(tag.startsWith('move:'))safe(p=>moveNode(p.pages.find(x=>x.id===activeId),tag.slice(5),parentId,index));
   }
   function requiredNodes(){const nodes=[];walkNodes(page.components,c=>{if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.required&&!fields[c.props.field])nodes.push(c);});return nodes;}
@@ -350,7 +384,7 @@
     if(!runtimeState.enabled)return;
     if(!confirm('Replace the browser editor project with the locally published application? Export any unsaved work first.'))return;
     try{const response=await fetch('/api/runtime/project');if(!response.ok)throw new Error('Published project unavailable');
-      const next=validateProject(migrateProject(await response.json()));project=next;activeId=next.pages[0].id;activeModelId=next.models[0]?.id??'';activeWorkflowId=next.workflows[0]?.id??'';activeStepId=next.workflows[0]?.startStepId??'';previous=[];upcoming=[];selectedId='';fields={};liveRecords={};selectedRecords={};runtimeMode='memory';notice='Published project loaded. Open Preview and choose MySQL (local).';
+      const next=validateProject(migrateProject(await response.json()));project=next;debugSession=null;activeId=next.pages[0].id;activeModelId=next.models[0]?.id??'';activeWorkflowId=next.workflows[0]?.id??'';activeStepId=next.workflows[0]?.startStepId??'';previous=[];upcoming=[];selectedId='';fields={};liveRecords={};selectedRecords={};runtimeMode='memory';notice='Published project loaded. Open Preview and choose MySQL (local).';
     }catch(e){notice=e.message;}
   }
   function addModel(){const n=project.models.length+1, id=createId('model');safe(p=>p.models.push(createModel(`Model ${n}`,`model_${n}`,id)));if(!notice){activeModelId=id;activeFieldId='';}}
@@ -437,7 +471,7 @@
 
 <div class="studio" class:workflow-view={tab==='workflows'}>
   <header class="topbar">
-    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · alpha 0.6</small></div></div>
+    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · v1.1</small></div></div>
     <div class="project"><span class="status-dot"></span><input aria-label="Project name" value={project.name} onchange={e=>safe(p=>p.name=e.currentTarget.value)} /></div>
     <nav class="actions" aria-label="Project actions">
       <button onclick={undo} disabled={!previous.length} title="Undo">↶</button>
