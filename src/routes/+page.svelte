@@ -524,6 +524,15 @@
             <button class="tool" draggable="true" ondragstart={e=>beginDrag(e,`new:${item.type}`)} onclick={()=>addComponent(item.type,selected&&CONTAINER_TYPES.includes(selected.type)?selected.id:'')}><span class="tool-icon">{item.icon}</span>{item.label}</button>
           {/each}</div>
         {/each}</div>
+        <div class="sidebar-head"><span>REUSABLE COMPONENTS</span><small>{project.templates?.length??0} saved</small></div>
+        <div class="template-list">
+          {#each project.templates??[] as template (template.id)}
+            <div class="template-item">
+              <button draggable="true" ondragstart={e=>beginDrag(e,`template:${template.id}`)} onclick={()=>insertSavedTemplate(template.id,selected&&CONTAINER_TYPES.includes(selected.type)?selected.id:'')} title="Insert a fresh copy of this reusable component">▧ {template.name}</button>
+              <button class="template-remove" aria-label={`Remove reusable component ${template.name}`} title="Remove from library" onclick={()=>deleteSavedTemplate(template.id)}>×</button>
+            </div>
+          {:else}<p class="sidebar-note">Select a component or layout and save it from Properties to reuse it across pages.</p>{/each}
+        </div>
       {:else if tab==='workflows'}
         <div class="sidebar-head"><span>WORKFLOWS</span><button onclick={()=>createWorkflowFromButton()} aria-label="Add workflow">+</button></div>
         <div class="project-tree workflow-list">{#each project.workflows as flow (flow.id)}<button class:active={activeWorkflowId===flow.id} onclick={()=>selectWorkflows(flow.id)}><span>◇</span>{flow.name}<small>{flow.steps.length} steps</small></button>{:else}<p class="sidebar-note">Add a button on a page, then create its click workflow.</p>{/each}</div>
@@ -586,13 +595,35 @@
                   {#each diagram.edges as edge (`${edge.from}-${edge.to}-${edge.kind}`)}<path d={edge.path} class:edge-true={edge.kind==='true'} class:edge-false={edge.kind==='false'} fill="none" stroke-width="2.5" />{/each}
                 </svg>
                 {#each diagram.nodes as node (node.id)}
-                  <button class="workflow-node" class:node-selected={activeStepId===node.id} class:node-condition={node.type==='condition'} style:left={`${node.x}px`} style:top={`${node.y}px`} onclick={()=>activeStepId=node.id}>
+                  <button class="workflow-node" class:node-selected={activeStepId===node.id} class:node-condition={node.type==='condition'} class:node-debug-next={debugSession?.currentStepId===node.id&&!debugSession.finished} class:node-debug-visited={Boolean(debugSession?.visitedIds.includes(node.id))} style:left={`${node.x}px`} style:top={`${node.y}px`} onclick={()=>activeStepId=node.id}>
                     <small>{node.id===activeWorkflow.startStepId?'▶ START · ':''}{STEP_TYPES.find(k=>k.type===node.type)?.label}</small>
                     <strong>{stepDescription(node)}</strong>
                     <span>{node.type==='condition'?`TRUE → ${node.trueId?'step':'END'}   |   FALSE → ${node.falseId?'step':'END'}`:node.type==='stop'?'END':node.nextId?'→ next step':'→ END'}</span>
                   </button>
                 {/each}
               </div></div>
+              <div class="debugger-panel" aria-label="Read-only workflow debugger">
+                <div class="debugger-heading"><div><strong>Step-through debugger</strong><p>Dry run only. Database writes, navigation, messages and form changes are simulated; nothing is sent to MySQL.</p></div><span>NO SIDE EFFECTS</span></div>
+                <div class="debugger-inputs">
+                  {#each flowFields as field (field)}
+                    <label>{field}<input aria-label={`Debug ${field}`} value={debugInputs[field]??''} oninput={e=>{debugInputs={...debugInputs,[field]:e.currentTarget.value};debugSession=null;}} placeholder="Test value" /></label>
+                  {/each}
+                  {#each project.models.filter(model=>activeWorkflow.steps.some(step=>step.type==='condition'&&step.operator==='selected'&&step.modelId===model.id)) as model (model.id)}
+                    <label class="debugger-selection"><input type="checkbox" checked={Boolean(debugSelectedRecords[model.id])} onchange={e=>{debugSelectedRecords={...debugSelectedRecords,[model.id]:e.currentTarget.checked?'example_record':''};debugSession=null;}} />{model.name} selected</label>
+                  {/each}
+                </div>
+                <div class="debugger-buttons"><button onclick={beginDebugSession}>Start / Reset</button><button onclick={stepDebug} disabled={!debugSession||debugSession.finished}>Step</button><button onclick={finishDebug} disabled={!debugSession||debugSession.finished}>Run to end</button>
+                  {#if debugSession}<span aria-live="polite">{debugSession.finished?'Complete':`Next: ${debugSession.currentStepId}`} · {debugSession.trace.length} executed</span>{/if}
+                </div>
+                {#if debugSession}
+                  <div class="debugger-results">
+                    <div><strong>Execution trace</strong>
+                      <ol>{#each debugSession.trace as item,i (i)}<li><code>{item.stepId}</code> · {item.type}{item.outcome?` · ${item.outcome.toUpperCase()}`:''}</li>{:else}<li>Ready to step from the starting node</li>{/each}</ol>
+                    </div>
+                    <div><strong>Simulated effects</strong><pre>{JSON.stringify(debugSession.effects,null,2)}</pre><strong>Trial form state</strong><pre>{JSON.stringify(debugSession.fields,null,2)}</pre></div>
+                  </div>
+                {/if}
+              </div>
               <div class="workflow-instructions"><strong>How it works</strong><span>Choose an action in the toolbar, click <b>Add step</b>, then select a card to change its targets and settings. Cyclic or broken paths are rejected automatically.</span></div>
             {:else}
               <div class="empty-state">No workflows yet. Create a button in the page designer, then click <b>+ Workflow</b> to connect visual logic to it.</div>
@@ -683,6 +714,10 @@
             <p class="hint">{workflowForButton(project,activeId,selected.id)?.name??'Uses the legacy button action until a workflow is connected.'}</p>
             <button class="model-add" onclick={()=>createWorkflowFromButton(activeId,selected.id)}>{workflowForButton(project,activeId,selected.id)?'Edit visual workflow':'+ Create visual workflow'}</button>
           {/if}
+          <div class="section-label">REUSABLE COMPONENT</div>
+          <label class="property-label">Library name<input value={templateName} placeholder={String(selected.props.title||selected.props.text||selected.type).slice(0,80)} oninput={e=>templateName=e.currentTarget.value} /></label>
+          <button class="model-add" onclick={saveSelectedTemplate}>Save selected component / layout</button>
+          <p class="hint">Saves a snapshot of this component and its children. Instances receive fresh IDs; click workflows must be connected separately.</p>
           {#if CONTAINER_TYPES.includes(selected.type)}<button class="model-add" onclick={()=>addComponent('text',selected.id)}>+ Add text inside</button>{/if}
           <div class="inspector-buttons"><button onclick={duplicateSelected}>Duplicate</button><button class="danger" onclick={deleteSelected}>Delete</button></div>
           <p class="hint">Drag into a layout on the canvas or click a container in the tree before adding components.</p>
