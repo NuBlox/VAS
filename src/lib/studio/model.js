@@ -136,6 +136,31 @@ export function duplicateNode(node) {
   walkNodes([copy],n=>{n.id=createId('component');});
   return copy;
 }
+/** Copy a component subtree into the project's reusable library. No workflow triggers are copied. */
+export function saveComponentTemplate(project,node,name,id=createId('template')) {
+  const title=String(name??'').trim();
+  if(!title||title.length>120)throw new Error('Template name must be 1–120 characters');
+  if(!Array.isArray(project.templates))project.templates=[];
+  if(project.templates.length>=40)throw new Error('A project may have at most 40 templates');
+  if(project.templates.some(t=>t.id===id))throw new Error('Duplicate template ID');
+  const template={id,name:title,node:duplicateNode(node)};
+  project.templates.push(template);
+  return template;
+}
+/** Insert an independent copy: all nested component IDs are regenerated. */
+export function insertComponentTemplate(project,templateId,pageId,parentId='',index) {
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template)throw new Error('Reusable component not found');
+  const page=project.pages.find(p=>p.id===pageId);
+  if(!page)throw new Error('Destination page not found');
+  const node=duplicateNode(template.node);
+  insertNode(page,node,parentId,index);
+  return node;
+}
+export function deleteComponentTemplate(project,id) {
+  if(!project.templates?.some(t=>t.id===id))throw new Error('Reusable component not found');
+  project.templates=project.templates.filter(t=>t.id!==id);
+}
 export function moveComponent(components,fromIndex,toIndex) {
   if(!Number.isInteger(fromIndex)||!Number.isInteger(toIndex)||fromIndex<0||fromIndex>=components.length||toIndex<0||toIndex>components.length)throw new Error('Invalid move indices');
   const copy=components.slice();const [item]=copy.splice(fromIndex,1);
@@ -197,6 +222,33 @@ export function validateProject(project) {
         if(c.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(c.props.action))throw new Error('Invalid button action');
       }
     };check(page.components,0);
+  }
+  // Optional in schema v3: older published project documents remain byte-for-byte compatible.
+  if(project.templates!==undefined){
+    if(!Array.isArray(project.templates)||project.templates.length>40)throw new Error('Invalid reusable component library');
+    const templateIds=new Set();
+    for(const template of project.templates){
+      if(!plain(template)||typeof template.id!=='string'||!template.id||template.id.length>120||templateIds.has(template.id)||
+          typeof template.name!=='string'||!template.name.trim()||template.name.length>120||!plain(template.node))throw new Error('Invalid or duplicate reusable component');
+      templateIds.add(template.id);
+      const ids=new Set();let count=0;
+      function checkTemplateNode(node,depth){
+        if(++count>100||depth>7)throw new Error('Reusable component exceeds size or nesting limit');
+        if(!plain(node)||typeof node.id!=='string'||!node.id||ids.has(node.id)||!COMPONENT_TYPES.includes(node.type)||!plain(node.props))throw new Error('Invalid reusable component tree');
+        ids.add(node.id);
+        for(const [key,value] of Object.entries(node.props))if(key.length>120||!['string','number','boolean'].includes(typeof value)||(typeof value==='string'&&value.length>10000))throw new Error('Invalid reusable component property');
+        if(CONTAINER_TYPES.includes(node.type)){
+          if(!Array.isArray(node.children))throw new Error('Reusable container must have children');
+          for(const child of node.children)checkTemplateNode(child,depth+1);
+        }else if(node.children!==undefined)throw new Error('Reusable leaf cannot have children');
+        if(node.props.bindingModelId||node.props.bindingFieldId){
+          const model=modelLookup.get(node.props.bindingModelId);
+          if(!model||(['input','textarea','select','checkbox'].includes(node.type)&&!model.fields.some(f=>f.id===node.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(node.type)&&node.props.bindingFieldId))throw new Error('Broken reusable component binding');
+        }
+        if(node.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(node.props.action))throw new Error('Invalid reusable button action');
+      }
+      checkTemplateNode(template.node,0);
+    }
   }
   validateWorkflows(project,walkNodes);
   return project;
