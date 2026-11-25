@@ -133,7 +133,7 @@ export function removeNode(page,id) {
 }
 export function duplicateNode(node) {
   const copy=cloneProject(node);
-  walkNodes([copy],n=>{n.id=createId('component');});
+  walkNodes([copy],n=>{n.id=createId('component');delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;});
   return copy;
 }
 /** Copy a component subtree into the project's reusable library. No workflow triggers are copied. */
@@ -159,7 +159,91 @@ export function insertComponentTemplate(project,templateId,pageId,parentId='',in
 }
 export function deleteComponentTemplate(project,id) {
   if(!project.templates?.some(t=>t.id===id))throw new Error('Reusable component not found');
+  if(project.pages.some(page=>{let found=false;walkNodes(page.components,n=>{if(n.sourceTemplateId===id)found=true;});return found;}))throw new Error('Detach linked instances before deleting the master');
   project.templates=project.templates.filter(t=>t.id!==id);
+}
+/** Linked instances inherit master properties and retain only explicit local overrides. */
+export function insertLinkedTemplate(project,templateId,pageId,parentId='',index){
+  const template=project.templates?.find(t=>t.id===templateId);
+  const page=project.pages.find(p=>p.id===pageId);
+  if(!template||!page)throw new Error('Reusable component or destination page not found');
+  if(parentId&&findLinkedInstance(page,parentId))throw new Error('Detach a linked component before adding children');
+  const node=cloneProject(template.node);
+  walkNodes([node],n=>{n.sourceTemplateNodeId=n.id;n.id=createId('component');});
+  node.sourceTemplateId=templateId;
+  insertNode(page,node,parentId,index);
+  return node;
+}
+export function findLinkedInstance(page,nodeId){
+  function inspect(nodes,root=null){
+    for(const node of nodes){
+      const linked=node.sourceTemplateId?node:root;
+      if(node.id===nodeId)return linked?{root:linked,node,templateId:linked.sourceTemplateId}:null;
+      if(node.children){const result=inspect(node.children,linked);if(result)return result;}
+    }
+    return null;
+  }
+  return inspect(page.components);
+}
+function assertOverrideValues(templateNode,patch){
+  if(!plain(patch))throw new Error('Instance overrides must be an object');
+  for(const [key,value] of Object.entries(patch)){
+    if(!Object.hasOwn(templateNode.props,key)||typeof value!==typeof templateNode.props[key]||
+       key.length>120||(typeof value==='string'&&value.length>10000)||
+       (typeof value==='number'&&!Number.isFinite(value)))throw new Error('Invalid reusable component override');
+  }
+}
+export function synchronizeLinkedTemplates(project,templateId){
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template)throw new Error('Reusable master component not found');
+  function update(node,master){
+    if(node.sourceTemplateNodeId!==master.id||node.type!==master.type)throw new Error('Linked component structure differs from master; detach before changing structure');
+    const patch=node.overrides??{};assertOverrideValues(master,patch);
+    node.props={...cloneProject(master.props),...patch};
+    if(master.children){
+      if(!Array.isArray(node.children)||node.children.length!==master.children.length)throw new Error('Linked component structure differs from master');
+      for(let i=0;i<master.children.length;i++)update(node.children[i],master.children[i]);
+    }else if(node.children!==undefined)throw new Error('Linked component leaf has children');
+  }
+  for(const page of project.pages)walkNodes(page.components,node=>{
+    if(node.sourceTemplateId===templateId)update(node,template.node);
+  });
+}
+export function editMasterProperties(project,templateId,sourceNodeId,patch){
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template)throw new Error('Reusable master component not found');
+  let found;walkNodes([template.node],n=>{if(n.id===sourceNodeId)found=n;});
+  if(!found)throw new Error('Reusable master node not found');
+  assertOverrideValues(found,patch);
+  Object.assign(found.props,patch);
+  synchronizeLinkedTemplates(project,templateId);
+}
+export function overrideLinkedProperties(project,pageId,nodeId,patch){
+  const page=project.pages.find(p=>p.id===pageId);
+  const linked=page&&findLinkedInstance(page,nodeId);
+  if(!linked)throw new Error('Selected component is not linked');
+  const template=project.templates?.find(t=>t.id===linked.templateId);
+  let master;walkNodes([template.node],n=>{if(n.id===linked.node.sourceTemplateNodeId)master=n;});
+  if(!master)throw new Error('Linked master node is missing');
+  assertOverrideValues(master,patch);
+  const local={...(linked.node.overrides??{})};
+  for(const [key,value] of Object.entries(patch)){
+    if(value===master.props[key])delete local[key];else local[key]=value;
+  }
+  if(Object.keys(local).length)linked.node.overrides=local;else delete linked.node.overrides;
+  synchronizeLinkedTemplates(project,linked.templateId);
+}
+export function resetLinkedOverrides(project,pageId,nodeId){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  if(!linked)throw new Error('Selected component is not linked');
+  delete linked.node.overrides;
+  synchronizeLinkedTemplates(project,linked.templateId);
+}
+export function detachLinkedInstance(page,nodeId){
+  const linked=findLinkedInstance(page,nodeId);
+  if(!linked)throw new Error('Component is not linked');
+  walkNodes([linked.root],n=>{delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;});
+  return linked.root;
 }
 export function moveComponent(components,fromIndex,toIndex) {
   if(!Number.isInteger(fromIndex)||!Number.isInteger(toIndex)||fromIndex<0||fromIndex>=components.length||toIndex<0||toIndex>components.length)throw new Error('Invalid move indices');
@@ -250,6 +334,31 @@ export function validateProject(project) {
       checkTemplateNode(template.node,0);
     }
   }
+  // Linked instance roots and descendants must resolve to an existing master.
+  const templateMap=new Map((project.templates??[]).map(t=>[t.id,t]));
+  function validateLinkedNode(node,master,root){
+    if(node.sourceTemplateNodeId!==master.id||node.type!==master.type||
+       (root?node.sourceTemplateId===undefined:node.sourceTemplateId!==undefined))throw new Error('Invalid linked reusable component structure');
+    const overrides=node.overrides??{};assertOverrideValues(master,overrides);
+    const effective={...master.props,...overrides};
+    if(Object.keys(node.props).length!==Object.keys(effective).length||
+       Object.entries(effective).some(([key,value])=>node.props[key]!==value))throw new Error('Linked reusable properties differ from the master');
+    if(master.children){
+      if(!Array.isArray(node.children)||node.children.length!==master.children.length)throw new Error('Linked reusable component structure mismatch');
+      for(let i=0;i<master.children.length;i++)validateLinkedNode(node.children[i],master.children[i],false);
+    }else if(node.children!==undefined)throw new Error('Linked reusable leaf cannot have children');
+  }
+  function checkRoots(nodes){
+    for(const node of nodes){
+      if(node.sourceTemplateId!==undefined){
+        const master=templateMap.get(node.sourceTemplateId);
+        if(!master)throw new Error('Missing reusable component master');
+        validateLinkedNode(node,master.node,true);
+      }else if(node.sourceTemplateNodeId!==undefined||node.overrides!==undefined)throw new Error('Orphaned linked reusable component metadata');
+      else if(node.children)checkRoots(node.children);
+    }
+  }
+  for(const page of project.pages)checkRoots(page.components);
   validateWorkflows(project,walkNodes);
   return project;
 }

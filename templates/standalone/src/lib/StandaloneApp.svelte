@@ -101,19 +101,20 @@
       if (effect.type === 'set_field') change(effect.field, effect.value);
     }
   }
-  async function action(node) {
+  async function action(node, event = 'click') {
     const props = node.props;
-    if (props.action === 'navigate') { setPage(props.targetPageId); return; }
-    if (props.action === 'message') { notice = props.text || 'Action completed'; return; }
-    if (props.action === 'reset') { fields = {}; selected = {}; return; }
+    const workflow = project.workflows.find(w => w.trigger.pageId === currentPage.id && w.trigger.componentId === node.id && w.trigger.event === event);
+    if (!workflow && event !== 'click') return;
+    if (!workflow && props.action === 'navigate') { setPage(props.targetPageId); return; }
+    if (!workflow && props.action === 'message') { notice = props.text || 'Action completed'; return; }
+    if (!workflow && props.action === 'reset') { fields = {}; selected = {}; return; }
     if (!runtime?.authenticated) { notice = 'Sign in to use database actions'; return; }
     busy = true; notice = '';
     try {
-      const workflow = project.workflows.find(w => w.trigger.pageId === currentPage.id && w.trigger.componentId === node.id && w.trigger.event === 'click');
       if (workflow) {
         const destructive = workflow.steps.some(s => s.type === 'delete');
         if (destructive && !window.confirm('Delete selected records?')) return;
-        const payload = { pageId: currentPage.id, componentId: node.id, fields, selectedRecords: selected, confirmDelete: destructive };
+        const payload = { pageId: currentPage.id, componentId: node.id, event, fields, selectedRecords: selected, confirmDelete: destructive };
         const fingerprint = JSON.stringify({workflowId: workflow.id, payload});
         const key = pendingWorkflow?.fingerprint === fingerprint ? pendingWorkflow.key : crypto.randomUUID();
         pendingWorkflow = {fingerprint, key};

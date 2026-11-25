@@ -33,13 +33,15 @@ export function createStep(type='message',id=uniqueId('step'),options={}) {
   };
   return {id,type,...data[type],...options};
 }
-export function createWorkflow(pageId,componentId,name='New workflow',id=uniqueId('workflow')) {
+export const triggerEventsForType = type => type==='button'?['click']:['input','textarea'].includes(type)?['change','blur']:['select','checkbox'].includes(type)?['change']:[];
+export function createWorkflow(pageId,componentId,name='New workflow',id=uniqueId('workflow'),event='click') {
   const step=createStep('message');
-  return {id,name,trigger:{pageId,componentId,event:'click'},startStepId:step.id,steps:[step]};
+  return {id,name,trigger:{pageId,componentId,event},startStepId:step.id,steps:[step]};
 }
-export function workflowForButton(project,pageId,componentId) {
-  return (project.workflows??[]).find(w=>w.trigger.pageId===pageId&&w.trigger.componentId===componentId);
+export function workflowForTrigger(project,pageId,componentId,event='click') {
+  return (project.workflows??[]).find(w=>w.trigger.pageId===pageId&&w.trigger.componentId===componentId&&w.trigger.event===event);
 }
+export function workflowForButton(project,pageId,componentId) {return workflowForTrigger(project,pageId,componentId,'click');}
 export function stepTargets(step) {return step.type==='condition'?[step.trueId,step.falseId].filter(Boolean):step.type==='stop'?[]:step.nextId?[step.nextId]:[];}
 /** Strict graph integrity and references. Each step is reachable and workflows are acyclic. */
 export function validateWorkflows(project,walkNodes) {
@@ -51,14 +53,14 @@ export function validateWorkflows(project,walkNodes) {
     if(!plain(flow)||typeof flow.id!=='string'||!flow.id||flow.id.length>120||workflowIds.has(flow.id))throw new Error('Invalid or duplicate workflow ID');
     workflowIds.add(flow.id);
     if(typeof flow.name!=='string'||!flow.name.trim()||flow.name.length>120)throw new Error('Invalid workflow name');
-    if(!plain(flow.trigger)||flow.trigger.event!=='click'||typeof flow.trigger.pageId!=='string'||typeof flow.trigger.componentId!=='string')throw new Error('Workflow needs a button click trigger');
+    if(!plain(flow.trigger)||typeof flow.trigger.event!=='string'||typeof flow.trigger.pageId!=='string'||typeof flow.trigger.componentId!=='string')throw new Error('Workflow needs a valid component event trigger');
     const sourcePage=pages.get(flow.trigger.pageId);
     if(!sourcePage)throw new Error('Workflow trigger page does not exist');
-    const buttonIds=new Set(),fields=new Set();
-    walkNodes(sourcePage.components,node=>{if(node.type==='button')buttonIds.add(node.id);if(['input','textarea','checkbox','select'].includes(node.type))fields.add(node.props.field);});
-    if(!buttonIds.has(flow.trigger.componentId))throw new Error('Workflow trigger button is missing');
-    const key=`${flow.trigger.pageId}/${flow.trigger.componentId}`;
-    if(triggers.has(key))throw new Error('Only one workflow may be assigned to a button');
+    const controlEvents=new Map(),fields=new Set();
+    walkNodes(sourcePage.components,node=>{controlEvents.set(node.id,triggerEventsForType(node.type));if(['input','textarea','checkbox','select'].includes(node.type))fields.add(node.props.field);});
+    if(!controlEvents.get(flow.trigger.componentId)?.includes(flow.trigger.event))throw new Error('Workflow trigger button or supported component event is missing');
+    const key=`${flow.trigger.pageId}/${flow.trigger.componentId}/${flow.trigger.event}`;
+    if(triggers.has(key))throw new Error('Only one workflow may be assigned to a component event');
     triggers.add(key);
     if(!Array.isArray(flow.steps)||flow.steps.length<1||flow.steps.length>80)throw new Error('A workflow requires 1–80 steps');
     if(typeof flow.startStepId!=='string'||!flow.startStepId)throw new Error('Workflow requires a starting step');

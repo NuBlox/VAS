@@ -1,3 +1,22 @@
+# Visual Application Studio · Alpha 1.2 — Linked Components & Event Debugging
+
+VAS v1.2 introduces **linked reusable component instances** with explicit per-instance property overrides, safe master edits that update all linked instances, detachable instances, **component change/blur workflow triggers** and **dry-run workflow breakpoints**. The old reusable snapshot insertion remains available as an independent Copy. Existing v1.1 projects and click-triggered workflows remain compatible with the v3 metadata format.
+
+### Key behaviours
+
+- Save a reusable component from the inspector; use **Link** to insert a live instance or **Copy** for an independent snapshot. Linked nested components get stable instance IDs. Master property edits update linked instances while explicit local overrides survive. Reset overrides or detach to edit the structure independently.
+- Visual workflows can now start on button `click`, input/textarea `change` or `blur`, and select/checkbox `change`. The published workflow API validates the exact component *and event*, rejects spoofed triggers and never trusts client-supplied workflow graphs.
+- Toggle a breakpoint on any workflow step; **Continue / Break** stops before that step and can resume through it. **Step** executes exactly one simulated step and **Run to end** ignores breakpoints. The debugger never contacts MySQL.
+- The same event bindings are exported with standalone SvelteKit apps and operate only behind the existing localhost-only, signed release and local-auth protections.
+
+**Status:** development-only. No production identity, public deployment or automatic schema migration. Linked master structure changes are intentionally unsupported; detach an instance before changing its children. When reusing data-bound form controls on one page, field names must remain unique for server-backed workflows.
+
+**Validation:** `npm test` (72 passing Node tests, one optional MySQL integration test skipped without a database). GitHub CI additionally checks Svelte and generated application builds using MySQL 8.
+
+No MySQL migration is required for v1.2.
+
+---
+
 # Visual Application Studio · v1.1 — Reusable Components & Visual Debugger
 
 Version 1.1 builds on the verified v1.0 signed-release foundation and improves the actual visual authoring experience.
