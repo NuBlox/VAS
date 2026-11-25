@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import project from '../../runtime/project.json' with { type: 'json' };
   import { projectRevision } from './studio/revision.js';
-  import { walkNodes } from './studio/model.js';
+  import { walkNodes, renderPageComponents } from './studio/model.js';
   import { eventContextForTrigger } from './studio/workflow.js';
   import RenderNode from './RenderNode.svelte';
 
@@ -180,7 +180,7 @@
     {#if notice}<div role="status" class="notice">{notice}</div>{/if}
     {#if runtime && !runtime.enabled}<p class="warning">Database runtime unavailable. This generated application remains usable for navigation and layout preview, but persistent records require configured localhost MySQL and a local account.</p>{/if}
     <div class="canvas">
-      {#each currentPage.components as node (node.id)}
+      {#each renderPageComponents(project,currentPage,{fields,records,selected}) as node (node.id)}
         <RenderNode {node} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} />
       {/each}
     </div>

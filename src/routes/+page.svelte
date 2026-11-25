@@ -1,7 +1,7 @@
 <script>
   import '../app.css';
   import { onMount } from 'svelte';
-  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes, saveComponentTemplate, insertComponentTemplate, deleteComponentTemplate, insertLinkedTemplate, findLinkedInstance, editMasterProperties, overrideLinkedProperties, resetLinkedOverrides, detachLinkedInstance } from '#lib/studio/model.js';
+  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes, saveComponentTemplate, insertComponentTemplate, deleteComponentTemplate, insertLinkedTemplate, findLinkedInstance, editMasterProperties, overrideLinkedProperties, resetLinkedOverrides, detachLinkedInstance, exposeTemplateInput, removeTemplateInput, setLinkedInput, bindLinkedInput, clearLinkedInputBinding, exposeTemplateSlot, appendLinkedSlotNode, updateLinkedSlotNode, removeLinkedSlotNode, clearLinkedSlot, renderPageComponents } from '#lib/studio/model.js';
   import { exportPageToSvelte, exportMySQL } from '#lib/studio/compiler.js';
   import { projectRevision } from '#lib/studio/revision.js';
   import { validateRecord } from '#lib/studio/records.js';
@@ -37,6 +37,9 @@
   let workflowTrace=$state([]);
   let templateName=$state('');
   let editScope=$state('instance');
+  let exposedInputName=$state('');
+  let exposedInputProp=$state('');
+  let exposedSlotName=$state('');
   let debugBreakpoints=$state({});
   let debugInputs=$state({});
   let debugSelectedRecords=$state({});
@@ -54,6 +57,8 @@
   let page=$derived(project.pages.find(p=>p.id===activeId)??project.pages[0]);
   let selected=$derived(findNodeLocation(page,selectedId)?.node);
   let linked=$derived(findLinkedInstance(page,selectedId));
+  let linkedTemplate=$derived(linked?project.templates?.find(t=>t.id===linked.templateId):null);
+  let composedNodes=$derived(renderPageComponents(project,page,{fields,records:runtimeMode==='mysql'?liveRecords:records,selected:selectedRecords}));
   let activeModel=$derived(project.models.find(m=>m.id===activeModelId));
   let activeField=$derived(activeModel?.fields.find(f=>f.id===activeFieldId));
   let modelIds=$derived(new Map(project.models.map(m=>[m.id,m])));
@@ -258,8 +263,53 @@
     let inserted;safe(p=>{inserted=insertLinkedTemplate(p,id,activeId,parentId,index);});
     if(inserted&&!notice){selectedId=inserted.id;editScope='instance';notice='Linked component inserted. Master edits propagate; local overrides are preserved.';}
   }
-  function detachSelected(){if(!linked)return;safe(p=>detachLinkedInstance(p.pages.find(pg=>pg.id===activeId),selectedId));if(!notice){editScope='instance';notice='Instance detached; properties and structure are now independent.';}}
+  function detachSelected(){if(!linked)return;safe(p=>detachLinkedInstance(p.pages.find(pg=>pg.id===activeId),selectedId,p));if(!notice){editScope='instance';notice='Instance detached; properties and structure are now independent.';}}
   function resetSelectedOverrides(){if(!linked)return;safe(p=>resetLinkedOverrides(p,activeId,selectedId));}
+  const exposableProps=['text','title','body','label','placeholder','required','level'];
+  function definePublicInput(){
+    if(!linked||!selected)return;
+    const prop=exposedInputProp||exposableProps.find(key=>Object.hasOwn(selected.props,key));
+    safe(p=>exposeTemplateInput(p,linked.templateId,selected.sourceTemplateNodeId,prop,exposedInputName.trim()));
+    if(!notice){exposedInputName='';exposedInputProp='';}
+  }
+  function definePublicSlot(){
+    if(!linked||!selected)return;
+    safe(p=>exposeTemplateSlot(p,linked.templateId,selected.sourceTemplateNodeId,exposedSlotName.trim()));
+    if(!notice)exposedSlotName='';
+  }
+  function inputDefault(template,input){
+    let result;walkNodes([template.node],node=>{if(node.id===input.nodeId)result=node.props[input.prop];});return result;
+  }
+  function bindingCandidates(type){
+    const result=[];const seen=new Set();
+    walkNodes(page.components,node=>{
+      if(['input','textarea','select','checkbox'].includes(node.type)&&node.props.field){
+        const t=node.type==='checkbox'?'boolean':'string',name=node.props.field;
+        if(t===type&&!seen.has(name)){seen.add(name);result.push({id:`form:${name}`,label:`Form · ${name}`});}
+      }
+    });
+    for(const model of project.models)for(const field of model.fields){
+      const t=['integer','decimal'].includes(field.type)?'number':field.type==='boolean'?'boolean':'string';
+      if(t===type)result.push({id:`record:${model.id}:${field.id}`,label:`Selected ${model.name} · ${field.name}`});
+    }
+    return result;
+  }
+  function updateInputSource(name,option){
+    safe(p=>{
+      if(!option){clearLinkedInputBinding(p,activeId,linked.root.id,name);return;}
+      const [source,a,b]=option.split(':');
+      const binding=source==='form'?{source:'form',field:a}:{source:'record',modelId:a,fieldId:b};
+      bindLinkedInput(p,activeId,linked.root.id,name,binding);
+    });
+  }
+  function updateInputValue(input,raw){
+    const value=input.type==='number'?Number(raw):input.type==='boolean'?Boolean(raw):raw;
+    safe(p=>setLinkedInput(p,activeId,linked.root.id,input.name,value));
+  }
+  function modifySlotNode(name,child,key,value){
+    safe(p=>updateLinkedSlotNode(p,activeId,linked.root.id,name,child.id,{[key]:value}));
+  }
+
   function saveSelectedTemplate(){
     if(!selected)return;
     const name=templateName.trim()||selected.props.title||selected.props.text||CATALOG.find(x=>x.type===selected.type)?.label||selected.type;
@@ -560,7 +610,7 @@
 
 <div class="studio" class:workflow-view={tab==='workflows'}>
   <header class="topbar">
-    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · v1.2</small></div></div>
+    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · v1.4</small></div></div>
     <div class="project"><span class="status-dot"></span><input aria-label="Project name" value={project.name} onchange={e=>safe(p=>p.name=e.currentTarget.value)} /></div>
     <nav class="actions" aria-label="Project actions">
       <button onclick={undo} disabled={!previous.length} title="Undo">↶</button>
@@ -645,7 +695,7 @@
           {#if mode==='preview'}
             <div class="runtime-toolbar"><span>Data source</span><button class:chosen={runtimeMode==='memory'} onclick={()=>chooseRuntime('memory')}>Memory preview</button><button class:chosen={runtimeMode==='mysql'} disabled={!runtimeReady} onclick={()=>chooseRuntime('mysql')}>MySQL (local)</button><span class="runtime-message">{runtimeReady?'Published model matches editor':runtimeState.reason||'Editor changes must be published before live data is available'}</span>{#if workflowTrace.length}<span class="runtime-message">Workflow: {workflowTrace.map(x=>x.type).join(' → ')}</span>{/if}</div>
           {/if}
-          <div class="page-content">{@render canvasNodes(page.components,'')}{#if notice}<div class="feedback" role="status">{notice}</div>{/if}</div>
+          <div class="page-content">{@render canvasNodes(composedNodes,'')}{#if notice}<div class="feedback" role="status">{notice}</div>{/if}</div>
         </div></div>
       {:else if tab==='data'}
         <div class="canvas-scroll data-scroll"><div class="data-workspace"><div class="data-intro"><div><small>SCHEMA DESIGNER</small><h2>Data models</h2><p>Create entities, edit fields, and connect foreign keys. All metadata stays in your project.</p></div><button class="render-button" onclick={addModel}>+ New entity</button></div>
@@ -811,6 +861,55 @@
             <label class="property-label">Property edits<select bind:value={editScope}><option value="instance">Override this instance</option><option value="master">Edit master (all linked instances)</option></select></label>
             <button class="model-add" onclick={resetSelectedOverrides}>Reset selected node overrides</button>
             <button class="property-link" onclick={detachSelected}>Detach instance from library</button>
+            {#if linkedTemplate}
+              <div class="section-label">PUBLIC INPUTS · {linkedTemplate.inputs?.length??0}</div>
+              {#each linkedTemplate.inputs??[] as input (input.name)}
+                {@const binding=linked.root.inputBindings?.[input.name]}
+                {@const currentValue=linked.root.inputValues?.[input.name]??inputDefault(linkedTemplate,input)}
+                <label class="property-label">{input.name} · {input.type}
+                  <select value={binding?(binding.source==='form'?`form:${binding.field}`:`record:${binding.modelId}:${binding.fieldId}`):''} onchange={e=>updateInputSource(input.name,e.currentTarget.value)}>
+                    <option value="">Static value</option>
+                    {#each bindingCandidates(input.type) as option (option.id)}<option value={option.id}>{option.label}</option>{/each}
+                  </select>
+                  {#if !binding}
+                    {#if input.type==='boolean'}<input type="checkbox" checked={currentValue} onchange={e=>updateInputValue(input,e.currentTarget.checked)} />
+                    {:else}<input type={input.type==='number'?'number':'text'} value={String(currentValue)} onchange={e=>updateInputValue(input,e.currentTarget.value)} />{/if}
+                  {:else}<span class="hint">Bound to live application data; static value remains as fallback.</span>{/if}
+                </label>
+                <button class="property-link" onclick={()=>safe(p=>removeTemplateInput(p,linked.templateId,input.name))}>Remove public input</button>
+              {/each}
+              <div class="section-label">NAMED CONTENT SLOTS</div>
+              {#each linkedTemplate.slots??[] as slot (slot.name)}
+                <label class="property-label">{slot.name}
+                  <span class="hint">{linked.root.slotFills?.[slot.name]?.length??0} custom elements · fallback is master content</span>
+                </label>
+                <div class="inspector-buttons">
+                  {#each ['text','heading','card'] as type}
+                    <button onclick={()=>safe(p=>appendLinkedSlotNode(p,activeId,linked.root.id,slot.name,type))}>+ {type}</button>
+                  {/each}
+                  <button onclick={()=>safe(p=>clearLinkedSlot(p,activeId,linked.root.id,slot.name))}>Reset</button>
+                </div>
+                {#each linked.root.slotFills?.[slot.name]??[] as item (item.id)}
+                  <div class="section-label">{item.type} · slot content</div>
+                  {#each exposableProps.filter(key=>Object.hasOwn(item.props,key)&&typeof item.props[key]==='string') as key}
+                    <label class="property-label">{key}
+                      <input value={String(item.props[key])} onchange={e=>modifySlotNode(slot.name,item,key,e.currentTarget.value)} />
+                    </label>
+                  {/each}
+                  <button class="property-link" onclick={()=>safe(p=>removeLinkedSlotNode(p,activeId,linked.root.id,slot.name,item.id))}>Remove {item.type}</button>
+                {/each}
+              {/each}
+              <div class="section-label">EXPOSE MASTER INTERFACE</div>
+              <label class="property-label">Input name<input placeholder="e.g. customer_title" bind:value={exposedInputName} /></label>
+              <label class="property-label">Expose property
+                <select bind:value={exposedInputProp}><option value="">Choose property…</option>{#each exposableProps.filter(key=>Object.hasOwn(selected.props,key)) as key}<option value={key}>{key}</option>{/each}</select>
+              </label>
+              <button class="model-add" onclick={definePublicInput}>Expose typed input</button>
+              {#if CONTAINER_TYPES.includes(selected.type)}
+                <label class="property-label">Slot name<input placeholder="e.g. footer" bind:value={exposedSlotName} /></label>
+                <button class="model-add" onclick={definePublicSlot}>Expose this layout as a slot</button>
+              {/if}
+            {/if}
           {/if}
           <div class="section-label">CONFIGURATION</div>
           {#each properties[selected.type] as key}

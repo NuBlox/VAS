@@ -133,7 +133,7 @@ export function removeNode(page,id) {
 }
 export function duplicateNode(node) {
   const copy=cloneProject(node);
-  walkNodes([copy],n=>{n.id=createId('component');delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;});
+  walkNodes([copy],n=>{n.id=createId('component');delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;delete n.inputValues;delete n.inputBindings;delete n.slotFills;});
   return copy;
 }
 /** Copy a component subtree into the project's reusable library. No workflow triggers are copied. */
@@ -193,21 +193,182 @@ function assertOverrideValues(templateNode,patch){
        (typeof value==='number'&&!Number.isFinite(value)))throw new Error('Invalid reusable component override');
   }
 }
+/** A component's public inputs always reference a typed, existing master property. */
+const inputName=/^[a-z][a-z0-9_]{0,39}$/;
+const INPUT_PROPS=new Set(['text','title','body','label','placeholder','required','level']);
+const supportedValue=v=>['string','number','boolean'].includes(typeof v) && (typeof v!=='string'||v.length<=10000) && (typeof v!=='number'||Number.isFinite(v));
+function masterNode(template,nodeId){let found;walkNodes([template.node],node=>{if(node.id===nodeId)found=node;});return found;}
+function publicInput(template,name){return (template.inputs??[]).find(item=>item.name===name);}
+function inputForProperty(template,nodeId,key){return (template.inputs??[]).find(item=>item.nodeId===nodeId&&item.prop===key);}
+function expectedLinkedProps(template,master,root,node){
+  const result=cloneProject(master.props);
+  for(const input of template.inputs??[])if(input.nodeId===master.id&&Object.hasOwn(root.inputValues??{},input.name))result[input.prop]=root.inputValues[input.name];
+  return {...result,...(node.overrides??{})};
+}
+function reconcileLinkedNode(template,master,old,root){
+  if(old&&(old.sourceTemplateNodeId!==master.id||old.type!==master.type))throw new Error('Linked component master changed type');
+  const node=old??cloneProject(master);
+  if(!old){walkNodes([node],item=>{item.sourceTemplateNodeId=item.id;item.id=createId('component');});}
+  assertOverrideValues(master,node.overrides??{});
+  node.props=expectedLinkedProps(template,master,root,node);
+  if(master.children){
+    const previous=new Map((old?.children??[]).filter(c=>c.sourceTemplateNodeId).map(c=>[c.sourceTemplateNodeId,c]));
+    node.children=master.children.map(child=>reconcileLinkedNode(template,child,previous.get(child.id),root));
+  }
+  else delete node.children;
+  return node;
+}
 export function synchronizeLinkedTemplates(project,templateId){
   const template=project.templates?.find(t=>t.id===templateId);
   if(!template)throw new Error('Reusable master component not found');
-  function update(node,master){
-    if(node.sourceTemplateNodeId!==master.id||node.type!==master.type)throw new Error('Linked component structure differs from master; detach before changing structure');
-    const patch=node.overrides??{};assertOverrideValues(master,patch);
-    node.props={...cloneProject(master.props),...patch};
-    if(master.children){
-      if(!Array.isArray(node.children)||node.children.length!==master.children.length)throw new Error('Linked component structure differs from master');
-      for(let i=0;i<master.children.length;i++)update(node.children[i],master.children[i]);
-    }else if(node.children!==undefined)throw new Error('Linked component leaf has children');
-  }
   for(const page of project.pages)walkNodes(page.components,node=>{
-    if(node.sourceTemplateId===templateId)update(node,template.node);
+    if(node.sourceTemplateId!==templateId)return;
+    const updated=reconcileLinkedNode(template,template.node,node,node);
+    // Root identity and public instance settings survive master reorder/structure updates.
+    Object.assign(node,updated);
   });
+}
+/** Name a typed input for a master property, without duplicating its value. */
+export function exposeTemplateInput(project,templateId,nodeId,prop,name){
+  const template=project.templates?.find(t=>t.id===templateId),node=template&&masterNode(template,nodeId);
+  if(!node||!INPUT_PROPS.has(prop)||!Object.hasOwn(node.props,prop)||!supportedValue(node.props[prop]))throw new Error('Template input target is invalid');
+  if(!inputName.test(name)||!Array.isArray(template.inputs??[])||(template.inputs??[]).length>=30)throw new Error('Invalid template input name or limit');
+  if(publicInput(template,name)||inputForProperty(template,nodeId,prop))throw new Error('Duplicate reusable component input');
+  (template.inputs??=[]).push({name,nodeId,prop,type:typeof node.props[prop]});
+  return template.inputs.at(-1);
+}
+export function removeTemplateInput(project,templateId,name){
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template||!publicInput(template,name))throw new Error('Reusable component input not found');
+  template.inputs=template.inputs.filter(i=>i.name!==name);
+  for(const page of project.pages)walkNodes(page.components,node=>{if(node.sourceTemplateId===templateId){
+    if(node.inputValues)delete node.inputValues[name];if(node.inputBindings)delete node.inputBindings[name];
+  }});
+  synchronizeLinkedTemplates(project,templateId);
+}
+export function setLinkedInput(project,pageId,nodeId,name,value){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  if(!linked)throw new Error('Select a linked component');
+  const template=project.templates.find(t=>t.id===linked.templateId),input=publicInput(template,name);
+  if(!input||typeof value!==input.type||!supportedValue(value))throw new Error('Typed reusable input value is invalid');
+  linked.root.inputValues??={};linked.root.inputValues[name]=value;
+  if(linked.root.inputBindings)delete linked.root.inputBindings[name];
+  synchronizeLinkedTemplates(project,linked.templateId);
+}
+export function bindLinkedInput(project,pageId,nodeId,name,binding){
+  const page=project.pages.find(p=>p.id===pageId),linked=page&&findLinkedInstance(page,nodeId);
+  if(!linked)throw new Error('Select a linked component');
+  const template=project.templates.find(t=>t.id===linked.templateId),input=publicInput(template,name);
+  if(!input)throw new Error('Reusable input not found');
+  validateInputBinding(project,page,input,binding);
+  (linked.root.inputBindings??={})[name]=cloneProject(binding);
+}
+export function clearLinkedInputBinding(project,pageId,nodeId,name){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  if(!linked||!publicInput(project.templates.find(t=>t.id===linked.templateId),name))throw new Error('Reusable input not found');
+  if(linked.root.inputBindings)delete linked.root.inputBindings[name];
+}
+function inputFormType(page,field){let kinds=new Set();walkNodes(page.components,node=>{
+  if(node.props?.field===field&&['input','textarea','select','checkbox'].includes(node.type))kinds.add(node.type==='checkbox'?'boolean':'string');
+});return kinds.size===1?[...kinds][0]:null;}
+function validateInputBinding(project,page,input,binding){
+  if(!plain(binding))throw new Error('Invalid reusable input binding');
+  if(binding.source==='form'){
+    if(typeof binding.field!=='string'||!inputName.test(binding.field)||inputFormType(page,binding.field)!==input.type||Object.keys(binding).some(k=>!['source','field'].includes(k)))throw new Error('Invalid or incompatible form binding');
+  }else if(binding.source==='record'){
+    const model=project.models.find(m=>m.id===binding.modelId),field=model?.fields.find(f=>f.id===binding.fieldId);
+    const t=field?.type==='integer'||field?.type==='decimal'?'number':field?.type==='boolean'?'boolean':'string';
+    if(!field||t!==input.type||Object.keys(binding).some(k=>!['source','modelId','fieldId'].includes(k)))throw new Error('Invalid or incompatible record binding');
+  }else throw new Error('Unsupported reusable input binding source');
+}
+/** Named slots target layout containers; per-instance fills are display-only content. */
+const SLOT_TYPES=new Set(['heading','text','card','divider','section','columns']);
+function assertSlotContent(nodes,depth=0){
+  if(!Array.isArray(nodes)||nodes.length>30||depth>6)throw new Error('Invalid slot content size');
+  for(const node of nodes){
+    if(!plain(node)||!SLOT_TYPES.has(node.type)||typeof node.id!=='string'||!node.id||!plain(node.props)||node.sourceTemplateId!==undefined||node.sourceTemplateNodeId!==undefined||node.inputBindings!==undefined)throw new Error('Invalid slot content');
+    for(const [key,value] of Object.entries(node.props))if(key.length>120||!supportedValue(value))throw new Error('Invalid slot content property');
+    if(CONTAINER_TYPES.includes(node.type))assertSlotContent(node.children,depth+1);
+    else if(node.children!==undefined)throw new Error('Slot content leaf cannot have children');
+  }
+}
+export function exposeTemplateSlot(project,templateId,nodeId,name){
+  const template=project.templates?.find(t=>t.id===templateId),node=template&&masterNode(template,nodeId);
+  if(!node||!CONTAINER_TYPES.includes(node.type))throw new Error('Slot target must be a layout container');
+  if(!inputName.test(name)||(template.slots??[]).length>=15||(template.slots??[]).some(s=>s.name===name||s.nodeId===nodeId))throw new Error('Duplicate or invalid content slot');
+  (template.slots??=[]).push({name,nodeId});
+  return template.slots.at(-1);
+}
+export function fillLinkedSlot(project,pageId,nodeId,name,nodes){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  if(!linked)throw new Error('Select linked component for slot');
+  const template=project.templates.find(t=>t.id===linked.templateId);
+  if(!(template.slots??[]).some(s=>s.name===name))throw new Error('Content slot does not exist');
+  assertSlotContent(nodes);
+  const fill=nodes.map(duplicateNode);
+  (linked.root.slotFills??={})[name]=fill;
+  return fill;
+}
+export function appendLinkedSlotNode(project,pageId,nodeId,name,type){
+  if(!SLOT_TYPES.has(type))throw new Error('Slot component type is not supported');
+  const page=project.pages.find(p=>p.id===pageId),linked=page&&findLinkedInstance(page,nodeId);
+  if(!linked)throw new Error('Select linked component for slot');
+  const template=project.templates.find(t=>t.id===linked.templateId);
+  if(!(template.slots??[]).some(s=>s.name===name))throw new Error('Content slot does not exist');
+  const list=(linked.root.slotFills??={})[name]??=[];
+  if(list.length>=30)throw new Error('Content slot is full');
+  const node=createComponent(type);
+  list.push(node);
+  return node;
+}
+export function updateLinkedSlotNode(project,pageId,nodeId,name,childId,patch){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  const nodes=linked?.root.slotFills?.[name],child=nodes?.find(n=>n.id===childId);
+  if(!child||!plain(patch))throw new Error('Slot content node not found');
+  for(const [key,value] of Object.entries(patch))if(!Object.hasOwn(child.props,key)||typeof child.props[key]!==typeof value||!supportedValue(value)||!INPUT_PROPS.has(key))throw new Error('Invalid slot property');
+  Object.assign(child.props,patch);
+}
+export function removeLinkedSlotNode(project,pageId,nodeId,name,childId){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  const nodes=linked?.root.slotFills?.[name];
+  if(!nodes||!nodes.some(n=>n.id===childId))throw new Error('Slot content node not found');
+  linked.root.slotFills[name]=nodes.filter(n=>n.id!==childId);
+}
+export function clearLinkedSlot(project,pageId,nodeId,name){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  if(!linked)throw new Error('Select linked component for slot');
+  if(linked.root.slotFills)delete linked.root.slotFills[name];
+}
+/** Pure renderer: never persist live form/record data into published metadata. */
+export function renderPageComponents(project,page,context={}){
+  const result=cloneProject(page.components);
+  const originalRoots=[];walkNodes(result,node=>{if(node.sourceTemplateId)originalRoots.push(node);});
+  for(const root of originalRoots){
+    const template=project.templates?.find(t=>t.id===root.sourceTemplateId);
+    if(!template)continue;
+    for(const slot of template.slots??[]){
+      if(!Object.hasOwn(root.slotFills??{},slot.name))continue;
+      let target;walkNodes([root],node=>{if(node.sourceTemplateNodeId===slot.nodeId)target=node;});
+      if(target)target.children=cloneProject(root.slotFills[slot.name]);
+    }
+    for(const input of template.inputs??[]){
+      const binding=root.inputBindings?.[input.name];if(!binding)continue;
+      let value;
+      if(binding.source==='form')value=context.fields?.[binding.field];
+      else if(binding.source==='record'){
+        const model=project.models.find(m=>m.id===binding.modelId),field=model?.fields.find(f=>f.id===binding.fieldId);
+        const pk=model?.fields.find(f=>f.primary)?.name;
+        const match=(context.records?.[model.id]??[]).find(record=>{
+          const selected=context.selected?.[model.id];return String(record[pk])===String(plain(selected)?selected[pk]:selected);
+        });
+        value=field&&match?.[field.name];
+      }
+      if(typeof value!==input.type||!supportedValue(value))continue;
+      let node;walkNodes([root],item=>{if(item.sourceTemplateNodeId===input.nodeId)node=item;});
+      if(node)node.props[input.prop]=value;
+    }
+  }
+  return result;
 }
 export function editMasterProperties(project,templateId,sourceNodeId,patch){
   const template=project.templates?.find(t=>t.id===templateId);
@@ -239,10 +400,19 @@ export function resetLinkedOverrides(project,pageId,nodeId){
   delete linked.node.overrides;
   synchronizeLinkedTemplates(project,linked.templateId);
 }
-export function detachLinkedInstance(page,nodeId){
+export function detachLinkedInstance(page,nodeId,project){
   const linked=findLinkedInstance(page,nodeId);
   if(!linked)throw new Error('Component is not linked');
-  walkNodes([linked.root],n=>{delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;});
+  if(project){
+    const rendered=renderPageComponents(project,page);
+    let resolved;
+    walkNodes(rendered,n=>{if(n.id===linked.root.id)resolved=n;});
+    if(resolved)Object.assign(linked.root,resolved);
+  }
+  walkNodes([linked.root],n=>{
+    delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;
+    delete n.inputValues;delete n.inputBindings;delete n.slotFills;
+  });
   return linked.root;
 }
 export function moveComponent(components,fromIndex,toIndex) {
@@ -334,31 +504,61 @@ export function validateProject(project) {
       checkTemplateNode(template.node,0);
     }
   }
-  // Linked instance roots and descendants must resolve to an existing master.
+  // Validate the public template interfaces before validating linked instances.
+  for(const template of project.templates??[]){
+    const names=new Set(),targets=new Set();
+    if(!Array.isArray(template.inputs??[])||(template.inputs??[]).length>30||!Array.isArray(template.slots??[])||(template.slots??[]).length>15)throw new Error('Invalid template interface');
+    for(const input of template.inputs??[]){
+      const node=plain(input)&&masterNode(template,input.nodeId),target=`${input?.nodeId}:${input?.prop}`;
+      if(!node||!inputName.test(input.name)||names.has(input.name)||targets.has(target)||!INPUT_PROPS.has(input.prop)||!Object.hasOwn(node.props,input.prop)||input.type!==typeof node.props[input.prop]||!supportedValue(node.props[input.prop])||Object.keys(input).some(k=>!['name','nodeId','prop','type'].includes(k)))throw new Error('Invalid or duplicate template input');
+      names.add(input.name);targets.add(target);
+    }
+    names.clear();targets.clear();
+    for(const slot of template.slots??[]){
+      const node=plain(slot)&&masterNode(template,slot.nodeId);
+      if(!node||!CONTAINER_TYPES.includes(node.type)||!inputName.test(slot.name)||names.has(slot.name)||targets.has(slot.nodeId)||Object.keys(slot).some(k=>!['name','nodeId'].includes(k)))throw new Error('Invalid or duplicate template slot');
+      names.add(slot.name);targets.add(slot.nodeId);
+    }
+  }
   const templateMap=new Map((project.templates??[]).map(t=>[t.id,t]));
-  function validateLinkedNode(node,master,root){
+  const filledIds=new Set(componentIds);
+  function validateLinkedNode(node,master,root,template,page,isRoot){
     if(node.sourceTemplateNodeId!==master.id||node.type!==master.type||
-       (root?node.sourceTemplateId===undefined:node.sourceTemplateId!==undefined))throw new Error('Invalid linked reusable component structure');
+       (isRoot?node.sourceTemplateId!==template.id:node.sourceTemplateId!==undefined))throw new Error('Invalid linked reusable component structure');
     const overrides=node.overrides??{};assertOverrideValues(master,overrides);
-    const effective={...master.props,...overrides};
+    const effective=expectedLinkedProps(template,master,root,node);
     if(Object.keys(node.props).length!==Object.keys(effective).length||
        Object.entries(effective).some(([key,value])=>node.props[key]!==value))throw new Error('Linked reusable properties differ from the master');
     if(master.children){
       if(!Array.isArray(node.children)||node.children.length!==master.children.length)throw new Error('Linked reusable component structure mismatch');
-      for(let i=0;i<master.children.length;i++)validateLinkedNode(node.children[i],master.children[i],false);
+      for(let i=0;i<master.children.length;i++)validateLinkedNode(node.children[i],master.children[i],root,template,page,false);
     }else if(node.children!==undefined)throw new Error('Linked reusable leaf cannot have children');
   }
-  function checkRoots(nodes){
+  function checkRoots(nodes,page){
     for(const node of nodes){
       if(node.sourceTemplateId!==undefined){
-        const master=templateMap.get(node.sourceTemplateId);
-        if(!master)throw new Error('Missing reusable component master');
-        validateLinkedNode(node,master.node,true);
-      }else if(node.sourceTemplateNodeId!==undefined||node.overrides!==undefined)throw new Error('Orphaned linked reusable component metadata');
-      else if(node.children)checkRoots(node.children);
+        const template=templateMap.get(node.sourceTemplateId);
+        if(!template)throw new Error('Missing reusable component master');
+        if(!plain(node.inputValues??{})||!plain(node.inputBindings??{})||!plain(node.slotFills??{}))throw new Error('Invalid reusable instance settings');
+        for(const [name,value] of Object.entries(node.inputValues??{})){
+          const input=publicInput(template,name);
+          if(!input||typeof value!==input.type||!supportedValue(value))throw new Error('Invalid typed component input');
+        }
+        for(const [name,binding] of Object.entries(node.inputBindings??{})){
+          const input=publicInput(template,name);if(!input)throw new Error('Unknown reusable input binding');
+          validateInputBinding(project,page,input,binding);
+        }
+        for(const [name,fill] of Object.entries(node.slotFills??{})){
+          if(!(template.slots??[]).some(slot=>slot.name===name))throw new Error('Unknown content slot');
+          assertSlotContent(fill);
+          walkNodes(fill,item=>{if(filledIds.has(item.id))throw new Error('Duplicate slot content component ID');filledIds.add(item.id);});
+        }
+        validateLinkedNode(node,template.node,node,template,page,true);
+      }else if(node.sourceTemplateNodeId!==undefined||node.overrides!==undefined||node.inputValues!==undefined||node.inputBindings!==undefined||node.slotFills!==undefined)throw new Error('Orphaned linked reusable component metadata');
+      else if(node.children)checkRoots(node.children,page);
     }
   }
-  for(const page of project.pages)checkRoots(page.components);
+  for(const page of project.pages)checkRoots(page.components,page);
   validateWorkflows(project,walkNodes);
   return project;
 }

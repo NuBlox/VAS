@@ -1,3 +1,40 @@
+# Visual Application Studio · v1.4 — Composable Linked Components
+
+VAS v1.4 adds **typed public inputs**, **instance-specific data bindings** and **named content slots** to the linked component system introduced in v1.2. Existing schema-v3 projects and previously published releases remain compatible. No MySQL schema migration is necessary.
+
+## Build a reusable component
+
+1. In **Pages & tree**, save an existing section or card as a reusable component, then insert a **linked** instance.
+2. Select any node in the linked instance. In **EXPOSE MASTER INTERFACE**, name a property and expose it as a typed public input (string, number or boolean). The input points to an existing visual property in the master; it cannot change internal workflow IDs, SQL bindings or actions.
+3. Use **PUBLIC INPUTS** to set a value for just this instance, or bind it to a same-page form field or a typed field on the currently selected model record.
+4. Select a section or columns node and **Expose this layout as a slot**. The section's existing children are the fallback. Add text, heading or card content for each linked instance; content is independent and is reflected in both Studio preview and standalone SvelteKit exports.
+5. Edit a master visual property to propagate changes to all linked instances. Explicit instance overrides and public input values are preserved. **Detach instance** to materialise current static values and slot fills into an independent tree.
+
+### Design boundaries
+
+- Slots support display-only content (text, heading, card, divider and nested layout nodes). Form controls and buttons inside slot fills are deliberately refused in this milestone; event wiring remains attached to regular page components.
+- Values are resolved at render time using a pure function; runtime form data is **never written** into the published project JSON. Record bindings require a selected record and use the schema's declared value type. Missing values fall back to the instance's static property.
+- Input and slot names are unique per master and checked on import, export and publication. Duplicate IDs, missing targets, incompatible bindings and malformed slot fills are rejected.
+- Existing security constraints remain: **local development only**, no public hosting and no automatic database migrations.
+
+### Verification
+
+```bash
+npm test
+npm run check
+npm run build
+node scripts/generate-composition-fixture.mjs /tmp/vas-composed-project.json
+npm run app:export -- --project /tmp/vas-composed-project.json --out /tmp/vas-composed-application
+cd /tmp/vas-composed-application
+npm install
+npm run verify:release
+npm test
+npm run check
+npm run build
+```
+
+---
+
 # Visual Application Studio · v1.3 — Typed Events & Reusable Workflow Actions
 
 VAS v1.3 extends the **localhost-only development designer** with declarative, typed event context and reusable project-level workflow actions. Existing v1.2 projects remain valid without any database migration: the optional `actions` collection is additive to the v3 project document.
