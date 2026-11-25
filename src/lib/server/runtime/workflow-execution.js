@@ -6,7 +6,7 @@
  * module is an execution boundary, NOT a multi-user authorisation system.
  */
 import { walkNodes } from '../../studio/model.js';
-import { executeWorkflow } from '../../studio/workflow.js';
+import { executeWorkflow, triggerEventsForType } from '../../studio/workflow.js';
 import { RecordError, normaliseId, sqlFor } from '../../studio/records.js';
 import { getPublishedModel, getRecord, deleteRecord } from './store.js';
 import { canExecuteWorkflow } from './auth.js';
@@ -39,14 +39,16 @@ function formBindings(page) {
 
 /** Request input is an event snapshot, never a workflow definition. */
 export function validateWorkflowInvocation(project, workflowId, payload) {
-  if (!plain(payload) || Object.keys(payload).some(key => !['pageId', 'componentId', 'fields', 'selectedRecords', 'confirmDelete'].includes(key)))
+  if (!plain(payload) || Object.keys(payload).some(key => !['pageId', 'componentId', 'fields', 'selectedRecords', 'confirmDelete', 'event'].includes(key)))
     throw new RecordError('Invalid workflow invocation');
   const flow = project.workflows.find(item => item.id === workflowId);
   if (!flow) throw new RecordError('Workflow is not published', 404);
-  if (payload.pageId !== flow.trigger.pageId || payload.componentId !== flow.trigger.componentId || flow.trigger.event !== 'click')
-    throw new RecordError('Workflow trigger does not match the published button', 403);
+  if (payload.pageId !== flow.trigger.pageId || payload.componentId !== flow.trigger.componentId || (payload.event??'click') !== flow.trigger.event)
+    throw new RecordError('Workflow trigger does not match the published component event', 403);
   const page = project.pages.find(item => item.id === flow.trigger.pageId);
   if (!page) throw new RecordError('Workflow source page is missing', 503);
+  let triggerNode=null;walkNodes(page.components,node=>{if(node.id===flow.trigger.componentId)triggerNode=node;});
+  if(!triggerNode||!triggerEventsForType(triggerNode.type).includes(flow.trigger.event))throw new RecordError('Workflow trigger is not a supported published component event',403);
   const { names, bindings, tables } = formBindings(page);
   if (!plain(payload.fields) || !plain(payload.selectedRecords) || Object.keys(payload.fields).length > 100 || Object.keys(payload.selectedRecords).length > 100)
     throw new RecordError('Invalid workflow field and selection data');

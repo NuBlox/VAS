@@ -5,11 +5,12 @@ const isRecord = value => value !== null && typeof value === 'object' && !Array.
 const copy = value => JSON.parse(JSON.stringify(value));
 
 /** Create a snapshot of the trial inputs. The caller keeps its own input objects. */
-export function startWorkflowDebug(flow, { fields = {}, selectedRecords = {} } = {}) {
+export function startWorkflowDebug(flow, { fields = {}, selectedRecords = {}, breakpoints = [] } = {}) {
   if (!flow || !Array.isArray(flow.steps) || !flow.startStepId || typeof flow.id !== 'string') {
     throw new Error('Select a valid workflow before debugging');
   }
   if (!isRecord(fields) || !isRecord(selectedRecords)) throw new Error('Debugger inputs must be objects');
+  if (!Array.isArray(breakpoints) || breakpoints.length > 80 || breakpoints.some(id => typeof id !== 'string' || !flow.steps.some(s => s.id === id))) throw new Error('Invalid workflow breakpoints');
   return {
     workflowId: flow.id,
     currentStepId: flow.startStepId,
@@ -18,6 +19,8 @@ export function startWorkflowDebug(flow, { fields = {}, selectedRecords = {} } =
     trace: [],
     effects: [],
     visitedIds: [],
+    breakpoints: [...new Set(breakpoints)],
+    paused: false,
     finished: false
   };
 }
@@ -36,7 +39,8 @@ export function stepWorkflowDebug(flow, state) {
     selectedRecords: copy(state.selectedRecords),
     trace: state.trace.slice(),
     effects: state.effects.slice(),
-    visitedIds: [...state.visitedIds, step.id]
+    visitedIds: [...state.visitedIds, step.id],
+    paused: false
   };
   let target = '';
   let outcome;
@@ -70,5 +74,18 @@ export function stepWorkflowDebug(flow, state) {
 export function finishWorkflowDebug(flow, session) {
   let next = session;
   while (!next.finished) next = stepWorkflowDebug(flow, next);
+  return next;
+}
+
+/** Continue a dry run until a breakpoint or completion. A pause occurs BEFORE the step.
+ * Continuing an already-paused session executes that step once so it cannot hang. */
+export function continueWorkflowDebug(flow, session) {
+  if (!session || session.workflowId !== flow?.id) throw new Error('Debugger session is for another workflow');
+  let next = session;
+  if (next.paused && !next.finished) next = stepWorkflowDebug(flow, next);
+  while (!next.finished) {
+    if ((next.breakpoints ?? []).includes(next.currentStepId)) return { ...next, paused:true };
+    next = stepWorkflowDebug(flow, next);
+  }
   return next;
 }

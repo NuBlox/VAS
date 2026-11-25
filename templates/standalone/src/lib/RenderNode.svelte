@@ -32,20 +32,20 @@
 {:else if node.type === 'input' || node.type === 'textarea' || node.type === 'select'}
   <label><span>{props.label}</span>
     {#if node.type === 'textarea'}
-      <textarea name={props.field} placeholder={props.placeholder ?? ''} required={props.required ?? false} value={fields[props.field] ?? ''} on:input={event => change(props.field, event.currentTarget.value)}></textarea>
+      <textarea name={props.field} placeholder={props.placeholder ?? ''} required={props.required ?? false} value={fields[props.field] ?? ''} on:input={event => change(props.field, event.currentTarget.value)} on:change={event => {change(props.field,event.currentTarget.value);action(node,'change');}} on:blur={() => action(node,'blur')}></textarea>
     {:else if node.type === 'select'}
-      <select name={props.field} required={props.required ?? false} value={fields[props.field] ?? ''} on:change={event => change(props.field, event.currentTarget.value)}>
+      <select name={props.field} required={props.required ?? false} value={fields[props.field] ?? ''} on:change={event => {change(props.field,event.currentTarget.value);action(node,'change');}}>
         <option value="">Choose…</option>
         {#each String(props.options ?? '').split('\n').filter(Boolean) as option}
           <option value={option}>{option}</option>
         {/each}
       </select>
     {:else}
-      <input name={props.field} placeholder={props.placeholder ?? ''} required={props.required ?? false} value={fields[props.field] ?? ''} on:input={event => change(props.field, event.currentTarget.value)} />
+      <input name={props.field} placeholder={props.placeholder ?? ''} required={props.required ?? false} value={fields[props.field] ?? ''} on:input={event => change(props.field, event.currentTarget.value)} on:change={event => {change(props.field,event.currentTarget.value);action(node,'change');}} on:blur={() => action(node,'blur')} />
     {/if}
   </label>
 {:else if node.type === 'checkbox'}
-  <label class="inline"><input type="checkbox" name={props.field} checked={Boolean(fields[props.field])} on:change={event => change(props.field, event.currentTarget.checked)} /> {props.label}</label>
+  <label class="inline"><input type="checkbox" name={props.field} checked={Boolean(fields[props.field])} on:change={event => {change(props.field,event.currentTarget.checked);action(node,'change');}} /> {props.label}</label>
 {:else if node.type === 'button'}
   <button class:secondary={props.variant === 'secondary'} type="button" disabled={busy} on:click={() => action(node)}>{props.text}</button>
 {:else if node.type === 'table'}
