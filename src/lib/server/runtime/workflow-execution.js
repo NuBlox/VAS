@@ -6,7 +6,7 @@
  * module is an execution boundary, NOT a multi-user authorisation system.
  */
 import { walkNodes } from '../../studio/model.js';
-import { executeWorkflow, triggerEventsForType } from '../../studio/workflow.js';
+import { executeWorkflow, triggerEventsForType, verifyEventContext } from '../../studio/workflow.js';
 import { RecordError, normaliseId, sqlFor } from '../../studio/records.js';
 import { getPublishedModel, getRecord, deleteRecord } from './store.js';
 import { canExecuteWorkflow } from './auth.js';
@@ -39,7 +39,7 @@ function formBindings(page) {
 
 /** Request input is an event snapshot, never a workflow definition. */
 export function validateWorkflowInvocation(project, workflowId, payload) {
-  if (!plain(payload) || Object.keys(payload).some(key => !['pageId', 'componentId', 'fields', 'selectedRecords', 'confirmDelete', 'event'].includes(key)))
+  if (!plain(payload) || Object.keys(payload).some(key => !['pageId', 'componentId', 'fields', 'selectedRecords', 'confirmDelete', 'event', 'eventContext'].includes(key)))
     throw new RecordError('Invalid workflow invocation');
   const flow = project.workflows.find(item => item.id === workflowId);
   if (!flow) throw new RecordError('Workflow is not published', 404);
@@ -71,7 +71,10 @@ export function validateWorkflowInvocation(project, workflowId, payload) {
       Object.defineProperty(selectedRecords, modelId, { value: normaliseId(model, id), enumerable: true, writable: true, configurable: true });
     }
   }
-  return { flow, page, bindings, tables, context: { fields, selectedRecords }, confirmDelete: payload.confirmDelete === true };
+  let eventContext;
+  try { eventContext = verifyEventContext(flow, triggerNode, fields, payload.eventContext); }
+  catch(error) { throw new RecordError(error.message,400); }
+  return { flow, page, bindings, tables, context: { fields, selectedRecords, eventContext }, confirmDelete: payload.confirmDelete === true };
 }
 
 function boundPayload(project, modelId, bindings, context, operation) {
@@ -153,7 +156,7 @@ export async function executePublishedWorkflow({ project, workflowId, payload, d
       message: async text => effects.push({type:'message', text}),
       reset: async () => effects.push({type:'reset'}),
       setField: async (field, value) => effects.push({type:'set_field', field, value})
-    });
+    },{actions:project.actions??[]});
     const result = { trace, effects, committed: true, workflowId: flow.id };
     if(actor) {
       await writeAudit(connection,{actor,action:'workflow.execute',resourceType:'workflow',resourceId:flow.id,outcome:'committed',projectId:project.id});

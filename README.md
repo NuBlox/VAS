@@ -1,3 +1,29 @@
+# Visual Application Studio · v1.3 — Typed Events & Reusable Workflow Actions
+
+VAS v1.3 extends the **localhost-only development designer** with declarative, typed event context and reusable project-level workflow actions. Existing v1.2 projects remain valid without any database migration: the optional `actions` collection is additive to the v3 project document.
+
+## New visual authoring workflow
+
+1. Open **Workflows** and choose a workflow triggered by a form field's **change** or **blur** event (or create one from the form component's inspector).
+2. For a **Condition**, choose **Current event value** to branch on the event's typed value instead of an arbitrary form field.
+3. In **Reusable Actions**, create a named action, choose its input type (`string`, `number`, `boolean`) and effect (**show message** or **set field**). A field-setting action's target must exist, with a compatible value type, on every page whose workflow uses it.
+4. Add a **Reusable action** step to one or more workflows; bind its parameter to a validated literal, a same-page form field, or the triggering event value. Action references include an explicit version; editing a master increments the version and updates its references in the current project only.
+5. Use **Preview** or the read-only workflow debugger to simulate an event, then export JSON, publish locally, and export a standalone SvelteKit application. Generated applications forward the same typed event context to the runtime.
+
+### Runtime contract and limitations
+
+- Supported event types are **click** on buttons, **change**/**blur** on text inputs and textareas, and **change** on dropdowns/checkboxes. Button click has no event value; form text values are strings and checkbox values are booleans. Number inputs currently surface DOM string values.
+- The accepted event snapshot contains the published `pageId`, `componentId`, `event`, and for value-bearing controls the `field` and `value`. The server checks exact allowed keys, source control type and equality to the submitted allowlisted form field. This **is not proof of a physical UI interaction or user identity**; authentication, roles and published workflow permissions still apply.
+- Reusable actions have strictly allowlisted effects, typed inputs, numeric versions and immutable release snapshots. No arbitrary JavaScript, scripts, SQL or network calls execute from project metadata.
+- The built-in debugger simulates effects without database writes; MySQL-mode workflows run inside the existing server transaction. Generated standalone applications retain the same local-only restrictions.
+- **No SQL migrations are required** for this milestone. A modified project must be re-published and the runtime restarted before MySQL preview can use its latest revision.
+
+### Validation
+
+`npm test` checks the original builder and v1.3 event/action semantics. GitHub Actions additionally performs a MySQL 8 integration test, Svelte static analysis, the production build, and the independently generated application's tests/check/build. The test fixtures deliberately retain a v1.2 project without an `actions` collection.
+
+---
+
 # Visual Application Studio · Alpha 1.2 — Linked Components & Event Debugging
 
 VAS v1.2 introduces **linked reusable component instances** with explicit per-instance property overrides, safe master edits that update all linked instances, detachable instances, **component change/blur workflow triggers** and **dry-run workflow breakpoints**. The old reusable snapshot insertion remains available as an independent Copy. Existing v1.1 projects and click-triggered workflows remain compatible with the v3 metadata format.

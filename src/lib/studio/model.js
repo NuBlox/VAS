@@ -68,7 +68,7 @@ export function createProject() {
     createStep('message','step_customer_created',{text:'Customer saved successfully.',nextId:''}),
     createStep('message','step_name_required',{text:'Please enter the customer name.',nextId:''})
   ]};
-  return {schemaVersion:SCHEMA_VERSION,id:'app_starter',name:'Customer Workspace',models:[customer,order],workflows:[flow],pages:[
+  return {schemaVersion:SCHEMA_VERSION,id:'app_starter',name:'Customer Workspace',models:[customer,order],workflows:[flow],actions:[],pages:[
     {id:dashboard,name:'Overview',path:'/',components:[
       {...createComponent('heading','component_overview_heading'),props:{text:'Customer Workspace',level:1}},section,
       {...createComponent('button','component_overview_navigate'),props:{text:'Create a customer',variant:'primary',action:'navigate',targetPageId:customers,bindingModelId:''}}
