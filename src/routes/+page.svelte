@@ -5,7 +5,7 @@
   import { exportPageToSvelte, exportMySQL } from '#lib/studio/compiler.js';
   import { projectRevision } from '#lib/studio/revision.js';
   import { validateRecord } from '#lib/studio/records.js';
-  import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, workflowForTrigger, triggerEventsForType, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow } from '#lib/studio/workflow.js';
+  import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, workflowForTrigger, triggerEventsForType, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow, createActionDefinition, EVENT_VALUE_FIELD, eventContextForTrigger } from '#lib/studio/workflow.js';
   import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug } from '#lib/studio/debugger.js';
 
   const STORE='visual-application-studio-v1';
@@ -31,6 +31,7 @@
   let activeFieldId=$state('');
   let activeWorkflowId=$state(project.workflows[0]?.id??'');
   let activeStepId=$state(project.workflows[0]?.startStepId??'');
+  let activeActionId=$state(project.actions?.[0]?.id??'');
   let newStepType=$state('message');
   let newStepBranch=$state('true');
   let workflowTrace=$state([]);
@@ -58,21 +59,24 @@
   let modelIds=$derived(new Map(project.models.map(m=>[m.id,m])));
   let activeWorkflow=$derived(project.workflows.find(w=>w.id===activeWorkflowId));
   let activeStep=$derived(activeWorkflow?.steps.find(s=>s.id===activeStepId));
+  let activeAction=$derived((project.actions??[]).find(a=>a.id===activeActionId));
   let diagram=$derived(workflowDiagram(activeWorkflow));
   let flowSourcePage=$derived(project.pages.find(p=>p.id===activeWorkflow?.trigger.pageId));
+  let flowTriggerNode=$derived((()=>{let node=null;if(flowSourcePage)walkNodes(flowSourcePage.components,c=>{if(c.id===activeWorkflow?.trigger.componentId)node=c;});return node;})());
+  let flowHasEventValue=$derived(Boolean(flowTriggerNode&&flowTriggerNode.type!=='button'));
   let flowFields=$derived((()=>{const result=[];if(flowSourcePage)walkNodes(flowSourcePage.components,c=>{if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.field&&!result.includes(c.props.field))result.push(c.props.field);});return result;})());
   let allTriggers=$derived((()=>{const result=[];for(const pg of project.pages)walkNodes(pg.components,c=>{for(const event of triggerEventsForType(c.type))result.push({id:c.id,pageId:pg.id,event,label:`${pg.name} / ${c.props.text??c.props.label} / ${event}`});});return result;})());
 
   onMount(()=>{void (async()=>{
     let saved=false;
-    try {const raw=localStorage.getItem(STORE);if(raw){project=validateProject(migrateProject(JSON.parse(raw)));debugSession=null;saved=true;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}}
+    try {const raw=localStorage.getItem(STORE);if(raw){project=validateProject(migrateProject(JSON.parse(raw)));debugSession=null;saved=true;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeActionId=project.actions?.[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}}
     catch(e){notice=`Unable to restore project: ${e.message}`;}
     try {
       const response=await fetch('/api/runtime');
       if(response.ok)runtimeState=await response.json();
       if(runtimeState.enabled&&!saved){
         const published=await fetch('/api/runtime/project');
-        if(published.ok){project=validateProject(migrateProject(await published.json()));debugSession=null;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}
+        if(published.ok){project=validateProject(migrateProject(await published.json()));debugSession=null;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeActionId=project.actions?.[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}
       }
     }catch{runtimeState={enabled:false,projectId:'',revision:'',reason:'Runtime not available'};}
     hydrated=true;
@@ -126,32 +130,83 @@
   function updateWorkflowName(value){safe(p=>p.workflows.find(w=>w.id===activeWorkflowId).name=value);}
   function updateWorkflowTrigger(value){const [pageId,componentId,event]=value.split('|');safe(p=>{const w=p.workflows.find(w=>w.id===activeWorkflowId);Object.assign(w.trigger,{pageId,componentId,event});});}
   function deleteWorkflow(){if(!activeWorkflow)return;safe(p=>{p.workflows=p.workflows.filter(w=>w.id!==activeWorkflowId);});if(!notice)selectWorkflows(project.workflows[0]?.id??'');}
+  function addReusableAction(){
+    const action=createActionDefinition('Reusable message');
+    safe(p=>{if(!p.actions)p.actions=[];p.actions.push(action);});
+    if(!notice)activeActionId=action.id;
+  }
+  function editReusableAction(key,value){
+    if(!activeAction)return;
+    safe(p=>{
+      const action=p.actions.find(a=>a.id===activeActionId);
+      action[key]=value;
+      if(key==='kind'&&value==='message')action.targetField='';
+      if(key==='kind'&&value==='set_field')action.targetField=flowFields[0]??'';
+      action.version++;
+      for(const flow of p.workflows)for(const step of flow.steps)
+        if(step.type==='invoke_action'&&step.actionId===action.id)step.actionVersion=String(action.version);
+    });
+  }
+  function deleteReusableAction(){
+    if(!activeAction)return;
+    if(project.workflows.some(w=>w.steps.some(s=>s.type==='invoke_action'&&s.actionId===activeAction.id))){notice='Remove all references to this action before deleting it.';return;}
+    safe(p=>{p.actions=p.actions.filter(a=>a.id!==activeActionId);});
+    if(!notice)activeActionId=project.actions?.[0]?.id??'';
+  }
+  function defaultActionInput(action){return action?.inputType==='boolean'?'true':action?.inputType==='number'?'0':'Example message';}
+  function setStepAction(actionId){
+    const action=(project.actions??[]).find(a=>a.id===actionId);
+    if(!action)return;
+    safe(p=>{const step=p.workflows.find(w=>w.id===activeWorkflowId).steps.find(s=>s.id===activeStepId);
+      step.actionId=action.id;step.actionVersion=String(action.version);
+      step.inputSource='literal';step.inputField='';step.literal=defaultActionInput(action);
+    });
+  }
   function addWorkflowStep(){
     if(!activeWorkflow||!activeStep){notice='Select a workflow step before adding another.';return;}
-    if(newStepType==='condition'&&!flowFields.length){notice='Add a form field to the trigger page before creating a condition.';return;}
+    if(newStepType==='condition'&&!flowFields.length&&!flowHasEventValue){notice='Add a form field to the trigger page before creating a condition.';return;}
     if(['create','update','delete'].includes(newStepType)&&!project.models.length){notice='Create a data model first.';return;}
+    if(newStepType==='invoke_action'&&!(project.actions??[]).length){notice='Create a reusable action in the sidebar first.';return;}
     const values={};
-    if(newStepType==='condition')values.field=flowFields[0];
+    if(newStepType==='condition')values.field=flowFields[0]??EVENT_VALUE_FIELD;
     if(newStepType==='set_field'){
       if(!flowFields.length){notice='Add a form field to the trigger page first.';return;}
       values.field=flowFields[0];
     }
     if(['create','update','delete'].includes(newStepType))values.modelId=project.models[0].id;
     if(newStepType==='navigate')values.pageId=project.pages[0].id;
+    if(newStepType==='invoke_action'){const action=project.actions[0];Object.assign(values,{actionId:action.id,actionVersion:String(action.version),literal:defaultActionInput(action)});}
     const step=createStep(newStepType,undefined,values);
     safe(p=>insertWorkflowStep(p.workflows.find(w=>w.id===activeWorkflowId),step,activeStepId,newStepBranch));
     if(!notice)activeStepId=step.id;
   }
   function editWorkflowStep(key,value){safe(p=>{const s=p.workflows.find(w=>w.id===activeWorkflowId).steps.find(s=>s.id===activeStepId);s[key]=value;if(key==='operator'&&value==='selected'&&!s.modelId)s.modelId=p.models[0]?.id??'';});}
+  function setActionInputSource(source){
+    if(!activeStep||activeStep.type!=='invoke_action')return;
+    const action=(project.actions??[]).find(a=>a.id===activeStep.actionId);
+    if(!action)return;
+    const compatibleField=flowFields.find(field=>{
+      let control;walkNodes(flowSourcePage.components,node=>{if(node.props?.field===field)control=node;});
+      return (control?.type==='checkbox'?'boolean':'string')===action.inputType;
+    });
+    if(source==='field'&&!compatibleField){notice=`No ${action.inputType} form field is available on this page.`;return;}
+    safe(p=>{
+      const step=p.workflows.find(w=>w.id===activeWorkflowId).steps.find(s=>s.id===activeStepId);
+      step.inputSource=source;
+      if(source==='field')step.inputField=compatibleField;
+      if(source==='literal')step.literal=defaultActionInput(action);
+    });
+  }
   function changeWorkflowStepType(type){
     if(!activeStep||type===activeStep.type)return;
     const original=activeStep;
     const outgoing=original.type==='condition'?[original.trueId,original.falseId].filter(Boolean):original.nextId?[original.nextId]:[];
     if(new Set(outgoing).size>1){notice='Reconnect the condition branches before changing its type.';return;}
-    if(type==='condition'&&!flowFields.length){notice='Add a form field before creating a condition.';return;}
+    if(type==='condition'&&!flowFields.length&&!flowHasEventValue){notice='Add a form field before creating a condition.';return;}
+    if(type==='invoke_action'&&!(project.actions??[]).length){notice='Create a reusable action first.';return;}
     if(['create','update','delete'].includes(type)&&!project.models.length){notice='Create a data model first.';return;}
     const step=createStep(type,original.id);
-    if(type==='condition'){step.field=flowFields[0];step.trueId=outgoing[0]??'';}
+    if(type==='condition'){step.field=flowFields[0]??EVENT_VALUE_FIELD;step.trueId=outgoing[0]??'';}
     else if(type!=='stop')step.nextId=outgoing[0]??'';
     if(type==='set_field'){
       if(!flowFields.length){notice='Add a form field first.';return;}
@@ -159,6 +214,7 @@
     }
     if(['create','update','delete'].includes(type))step.modelId=project.models[0].id;
     if(type==='navigate')step.pageId=project.pages[0].id;
+    if(type==='invoke_action'){const action=project.actions[0];step.actionId=action.id;step.actionVersion=String(action.version);step.literal=defaultActionInput(action);}
     safe(p=>{const flow=p.workflows.find(w=>w.id===activeWorkflowId);flow.steps[flow.steps.findIndex(s=>s.id===original.id)]=step;});
   }
   function deleteWorkflowStep(){if(!activeStep)return;safe(p=>removeWorkflowStep(p.workflows.find(w=>w.id===activeWorkflowId),activeStepId));if(!notice)activeStepId=project.workflows.find(w=>w.id===activeWorkflowId)?.startStepId??'';}
@@ -168,11 +224,12 @@
     if(s.type==='navigate')return project.pages.find(p=>p.id===s.pageId)?.name??'Page';
     if(s.type==='message')return s.text;
     if(s.type==='set_field')return `${s.field} = ${s.value}`;
+    if(s.type==='invoke_action')return `${(project.actions??[]).find(a=>a.id===s.actionId)?.name??'Unknown action'} · ${s.inputSource}`;
     return s.type==='reset'?'Clear current form':'End';
   }
   function beginDebugSession(){
     if(!activeWorkflow)return;
-    try{debugSession=startWorkflowDebug(activeWorkflow,{fields:debugInputs,selectedRecords:debugSelectedRecords,breakpoints:debugBreakpoints[activeWorkflow.id]??[]});activeStepId=activeWorkflow.startStepId;notice='';}
+    try{debugSession=startWorkflowDebug(activeWorkflow,{fields:debugInputs,selectedRecords:debugSelectedRecords,eventContext:eventContextForTrigger(activeWorkflow,flowTriggerNode,debugInputs),actions:project.actions??[],breakpoints:debugBreakpoints[activeWorkflow.id]??[]});activeStepId=activeWorkflow.startStepId;notice='';}
     catch(e){notice=`Debugger: ${e.message}`;}
   }
   function stepDebug(){
@@ -271,14 +328,14 @@
     if(ids.size!==1)throw new Error('Bind the action button to one data model.');
     return project.models.find(m=>m.id===[...ids][0]);
   }
-  function payloadForModel(model,operation){
+  function payloadForModel(model,operation,sourceFields=fields){
     const data={};let count=0;
     walkNodes(page.components,c=>{
       if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingModelId===model.id){
         const attribute=model.fields.find(f=>f.id===c.props.bindingFieldId);
         if(!attribute||attribute.primary)return;
         if(Object.hasOwn(data,attribute.name))throw new Error(`Duplicate field binding: ${attribute.name}`);
-        const raw=fields[c.props.field];
+        const raw=sourceFields[c.props.field];
         if(raw!==undefined&&raw!==''||c.type==='checkbox'&&raw===false)data[attribute.name]=raw;
         count++;
       }
@@ -331,13 +388,14 @@
       if(busy)return;
       busy=true;workflowTrace=[];notice='';
       try{
+        const eventContext=eventContextForTrigger(workflow,c,fields);
         if(runtimeMode==='mysql'){
           if(!runtimeReady)throw new Error('Publish this project to use MySQL workflows.');
           const includesDelete=workflow.steps.some(step=>step.type==='delete');
           if(includesDelete&&!confirm(`This workflow can delete records. Allow deletion if its delete step is reached?`))return;
           // Keep the same request UUID and body after an uncertain network failure.
           // Changing the form creates a new request. The server never trusts this key for authentication.
-          const requestBody=JSON.stringify({pageId:page.id,componentId:c.id,event,fields:{...fields},selectedRecords:{...selectedRecords},confirmDelete:includesDelete});
+          const requestBody=JSON.stringify({pageId:page.id,componentId:c.id,event,eventContext,fields:{...fields},selectedRecords:{...selectedRecords},confirmDelete:includesDelete});
           const requestFingerprint=JSON.stringify([workflow.id,projectRevision(project),requestBody]);
           const requestKey=pendingWorkflowRequest?.fingerprint===requestFingerprint ? pendingWorkflowRequest.key : crypto.randomUUID();
           pendingWorkflowRequest={fingerprint:requestFingerprint,key:requestKey};
@@ -363,17 +421,18 @@
           if(!notice)notice='Server workflow committed successfully.';
           await refreshLive();
         }else{
-          const trace=await executeWorkflow(workflow,{fields:{...fields},selectedRecords:{...selectedRecords}}, {
+          const executionContext={fields:{...fields},selectedRecords:{...selectedRecords},eventContext};
+          const trace=await executeWorkflow(workflow,executionContext, {
             data:async(operation,modelId)=>{
               const model=project.models.find(m=>m.id===modelId);if(!model)throw new Error('Workflow model is missing');
               if(operation!=='create')throw new Error('Update and delete workflows require MySQL (local).');
-              const value=payloadForModel(model,'create');records={...records,[page.id]:[...(records[page.id]??[]),value]};
+              const value=payloadForModel(model,'create',executionContext.fields);records={...records,[page.id]:[...(records[page.id]??[]),value]};
             },
             navigate:async pageId=>selectPage(pageId),
             message:async text=>{notice=text;},
             reset:async()=>{fields={};selectedRecords={};},
             setField:async(field,value)=>{fields={...fields,[field]:value};}
-          });
+          },{actions:project.actions??[]});
           workflowTrace=trace;
         }
       }catch(e){notice=`Workflow: ${e.message}`;}finally{busy=false;}
@@ -414,7 +473,7 @@
     if(!runtimeState.enabled)return;
     if(!confirm('Replace the browser editor project with the locally published application? Export any unsaved work first.'))return;
     try{const response=await fetch('/api/runtime/project');if(!response.ok)throw new Error('Published project unavailable');
-      const next=validateProject(migrateProject(await response.json()));project=next;debugSession=null;activeId=next.pages[0].id;activeModelId=next.models[0]?.id??'';activeWorkflowId=next.workflows[0]?.id??'';activeStepId=next.workflows[0]?.startStepId??'';previous=[];upcoming=[];selectedId='';fields={};liveRecords={};selectedRecords={};runtimeMode='memory';notice='Published project loaded. Open Preview and choose MySQL (local).';
+      const next=validateProject(migrateProject(await response.json()));project=next;debugSession=null;activeId=next.pages[0].id;activeModelId=next.models[0]?.id??'';activeWorkflowId=next.workflows[0]?.id??'';activeActionId=next.actions?.[0]?.id??'';activeStepId=next.workflows[0]?.startStepId??'';previous=[];upcoming=[];selectedId='';fields={};liveRecords={};selectedRecords={};runtimeMode='memory';notice='Published project loaded. Open Preview and choose MySQL (local).';
     }catch(e){notice=e.message;}
   }
   function addModel(){const n=project.models.length+1, id=createId('model');safe(p=>p.models.push(createModel(`Model ${n}`,`model_${n}`,id)));if(!notice){activeModelId=id;activeFieldId='';}}
@@ -443,7 +502,7 @@
   async function importProject(e){const file=e.currentTarget.files?.[0];if(!file)return;
     try{const data=validateProject(migrateProject(JSON.parse(await file.text())));
       change(p=>{for(const k of Object.keys(p))delete p[k];Object.assign(p,data);});
-      selectPage(data.pages[0].id);activeModelId=data.models[0]?.id??'';activeWorkflowId=data.workflows[0]?.id??'';activeStepId=data.workflows[0]?.startStepId??'';notice='Project imported.';
+      selectPage(data.pages[0].id);activeModelId=data.models[0]?.id??'';activeWorkflowId=data.workflows[0]?.id??'';activeActionId=data.actions?.[0]?.id??'';activeStepId=data.workflows[0]?.startStepId??'';notice='Project imported.';
     }catch(err){notice=`Import failed: ${err.message}`;}e.currentTarget.value='';
   }
 </script>
@@ -567,6 +626,8 @@
         <div class="sidebar-head"><span>WORKFLOWS</span><button onclick={()=>createWorkflowFromButton()} aria-label="Add workflow">+</button></div>
         <div class="project-tree workflow-list">{#each project.workflows as flow (flow.id)}<button class:active={activeWorkflowId===flow.id} onclick={()=>selectWorkflows(flow.id)}><span>◇</span>{flow.name}<small>{flow.steps.length} steps</small></button>{:else}<p class="sidebar-note">Add a button or form control, then connect its event to a workflow.</p>{/each}</div>
         <p class="sidebar-note">Workflows respond to clicks, field changes and text-field blur events.</p>
+        <div class="sidebar-head"><span>REUSABLE ACTIONS</span><button onclick={addReusableAction} aria-label="Add reusable action">+</button></div>
+        <div class="project-tree workflow-list">{#each project.actions??[] as item (item.id)}<button class:active={activeActionId===item.id} onclick={()=>activeActionId=item.id}><span>↻</span>{item.name}<small>v{item.version} · {item.inputType}</small></button>{:else}<p class="sidebar-note">Create a typed action once, then invoke it from multiple workflows.</p>{/each}</div>
       {:else}
         <div class="sidebar-head"><span>DATA ENTITIES</span><button onclick={addModel} aria-label="Add model">+</button></div>
         <div class="project-tree">{#each project.models as model (model.id)}<button class:active={activeModelId===model.id} onclick={()=>{activeModelId=model.id;activeFieldId='';}}><span>▦</span>{model.name}<small>{model.fields.length} fields</small></button>{/each}</div>
@@ -690,6 +751,17 @@
         {:else}<div class="inspect-body"><p class="hint">Create an entity to begin modelling data.</p></div>{/if}
       {:else if tab==='workflows'}
         <div class="inspect-body">
+          <div class="section-label">REUSABLE ACTION LIBRARY</div>
+          <button class="model-add" onclick={addReusableAction}>+ New typed action</button>
+          {#if activeAction}
+            <label class="property-label">Action name<input value={activeAction.name} onchange={e=>editReusableAction('name',e.currentTarget.value)} /></label>
+            <label class="property-label">Action effect<select value={activeAction.kind} onchange={e=>editReusableAction('kind',e.currentTarget.value)}><option value="message">Show input as message</option><option value="set_field">Set a form field</option></select></label>
+            <label class="property-label">Typed input<select value={activeAction.inputType} onchange={e=>editReusableAction('inputType',e.currentTarget.value)}><option value="string">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
+            {#if activeAction.kind==='set_field'}<label class="property-label">Destination field<input value={activeAction.targetField} onchange={e=>editReusableAction('targetField',e.currentTarget.value)} placeholder="Field name on each using page" /></label>{/if}
+            <p class="hint">Published action version {activeAction.version}. Editing updates references in this project; older published releases remain unchanged.</p>
+            <button class="danger page-delete" onclick={deleteReusableAction}>Delete reusable action</button>
+          {/if}
+          <div class="section-label">WORKFLOW</div>
           {#if activeWorkflow}
             <div class="selected-info"><div class="selection-icon">◇</div><div><strong>{activeWorkflow.name}</strong><small>{activeWorkflow.trigger.event} event · {activeWorkflow.steps.length} steps</small></div></div>
             <div class="section-label">WORKFLOW</div>
@@ -702,7 +774,7 @@
               {#if activeStep.type==='condition'}
                 <label class="property-label">Operator<select value={activeStep.operator} onchange={e=>editWorkflowStep('operator',e.currentTarget.value)}>{#each OPERATORS as op}<option value={op.value}>{op.label}</option>{/each}</select></label>
                 {#if activeStep.operator==='selected'}<label class="property-label">Selected entity<select value={activeStep.modelId} onchange={e=>editWorkflowStep('modelId',e.currentTarget.value)}>{#each project.models as m}<option value={m.id}>{m.name}</option>{/each}</select></label>
-                {:else}<label class="property-label">Form field<select value={activeStep.field} onchange={e=>editWorkflowStep('field',e.currentTarget.value)}>{#each flowFields as field}<option value={field}>{field}</option>{/each}</select></label>{/if}
+                {:else}<label class="property-label">Form field or event value<select value={activeStep.field} onchange={e=>editWorkflowStep('field',e.currentTarget.value)}>{#each flowFields as field}<option value={field}>{field}</option>{/each}{#if flowHasEventValue}<option value={EVENT_VALUE_FIELD}>Current event value ({flowTriggerNode.type==='checkbox'?'boolean':'string'})</option>{/if}</select></label>{/if}
                 {#if ['equals','not_equals','greater_than','less_than'].includes(activeStep.operator)}<label class="property-label">Compare with<input value={activeStep.value} onchange={e=>editWorkflowStep('value',e.currentTarget.value)} /></label>{/if}
               {:else if ['create','update','delete'].includes(activeStep.type)}
                 <label class="property-label">Entity<select value={activeStep.modelId} onchange={e=>editWorkflowStep('modelId',e.currentTarget.value)}>{#each project.models as m}<option value={m.id}>{m.name}</option>{/each}</select></label>
@@ -710,6 +782,12 @@
                 <label class="property-label">Destination page<select value={activeStep.pageId} onchange={e=>editWorkflowStep('pageId',e.currentTarget.value)}>{#each project.pages as p}<option value={p.id}>{p.name}</option>{/each}</select></label>
               {:else if activeStep.type==='message'}
                 <label class="property-label">Message<textarea value={activeStep.text} rows="4" onchange={e=>editWorkflowStep('text',e.currentTarget.value)}></textarea></label>
+              {:else if activeStep.type==='invoke_action'}
+                <label class="property-label">Reusable action<select value={activeStep.actionId} onchange={e=>setStepAction(e.currentTarget.value)}>{#each project.actions??[] as item}<option value={item.id}>{item.name} · v{item.version}</option>{/each}</select></label>
+                <label class="property-label">Input source<select value={activeStep.inputSource} onchange={e=>setActionInputSource(e.currentTarget.value)}><option value="literal">Typed literal</option><option value="field">Form field</option>{#if flowHasEventValue}<option value="event">Current event value ({flowTriggerNode.type==='checkbox'?'boolean':'string'})</option>{/if}</select></label>
+                {#if activeStep.inputSource==='literal'}<label class="property-label">Literal ({(project.actions??[]).find(a=>a.id===activeStep.actionId)?.inputType??'string'})<input value={activeStep.literal} onchange={e=>editWorkflowStep('literal',e.currentTarget.value)} /></label>{/if}
+                {#if activeStep.inputSource==='field'}<label class="property-label">Input field<select value={activeStep.inputField} onchange={e=>editWorkflowStep('inputField',e.currentTarget.value)}><option value="">Select input…</option>{#each flowFields as field}<option value={field}>{field}</option>{/each}</select></label>{/if}
+                <p class="hint">The action reference uses a published version and never executes user JavaScript.</p>
               {:else if activeStep.type==='set_field'}
                 <label class="property-label">Form field<select value={activeStep.field} onchange={e=>editWorkflowStep('field',e.currentTarget.value)}>{#each flowFields as field}<option value={field}>{field}</option>{/each}</select></label>
                 <label class="property-label">Literal value<input value={activeStep.value} onchange={e=>editWorkflowStep('value',e.currentTarget.value)} /></label>

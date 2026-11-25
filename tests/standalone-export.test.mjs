@@ -53,3 +53,23 @@ test('supports explicit project exports and refuses unsafe paths',async t=>{
   assert.notEqual(run(['--project',file,'--out',join(dir,'duplicate')],dir).status,0);
   assert.notEqual(run(['--release','0'.repeat(64),'--out',join(dir,'missing')],dir).status,0);
 });
+
+test('exports a v1.3 typed-event application with versioned action references intact',async t=>{
+  const { createWorkflow, createStep, createActionDefinition } = await import('../src/lib/studio/workflow.js');
+  const dir=await mkdtemp(join(tmpdir(),'vas-typed-export-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+  const project=createProject();
+  const action=createActionDefinition('Notify name','action_notify_name');
+  project.actions=[action];
+  const flow=createWorkflow('page_new_customer','component_form_name','Name change','workflow_name_change','change');
+  flow.startStepId='step_notify';
+  flow.steps=[createStep('invoke_action','step_notify',{actionId:action.id,actionVersion:'1',inputSource:'event',inputField:'',literal:'',nextId:''})];
+  project.workflows.push(flow);
+  const source=join(dir,'project.json');await writeFile(source,JSON.stringify(project));
+  const dest=join(dir,'app');const result=run(['--project',source,'--out',dest],dir);
+  assert.equal(result.status,0,result.stderr);
+  const snapshot=await readJSON(join(dest,'runtime/project.json'));
+  assert.equal(snapshot.actions[0].id,action.id);
+  assert.equal(snapshot.workflows.at(-1).steps[0].actionVersion,'1');
+  assert.match(await readFile(join(dest,'src/lib/StandaloneApp.svelte'),'utf8'),/eventContextForTrigger/);
+  assert.equal(spawnSync(process.execPath,['scripts/verify-release.mjs'],{cwd:dest}).status,0);
+});

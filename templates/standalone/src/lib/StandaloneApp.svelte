@@ -3,6 +3,7 @@
   import project from '../../runtime/project.json' with { type: 'json' };
   import { projectRevision } from './studio/revision.js';
   import { walkNodes } from './studio/model.js';
+  import { eventContextForTrigger } from './studio/workflow.js';
   import RenderNode from './RenderNode.svelte';
 
   const revision = projectRevision(project);
@@ -114,7 +115,7 @@
       if (workflow) {
         const destructive = workflow.steps.some(s => s.type === 'delete');
         if (destructive && !window.confirm('Delete selected records?')) return;
-        const payload = { pageId: currentPage.id, componentId: node.id, event, fields, selectedRecords: selected, confirmDelete: destructive };
+        const payload = { pageId: currentPage.id, componentId: node.id, event, eventContext: eventContextForTrigger(workflow,node,fields), fields, selectedRecords: selected, confirmDelete: destructive };
         const fingerprint = JSON.stringify({workflowId: workflow.id, payload});
         const key = pendingWorkflow?.fingerprint === fingerprint ? pendingWorkflow.key : crypto.randomUUID();
         pendingWorkflow = {fingerprint, key};

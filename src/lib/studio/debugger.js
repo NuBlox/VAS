@@ -1,11 +1,11 @@
 /** Read-only workflow debugger. No SQL, network calls, or user-authored JavaScript. */
-import { conditionResult } from './workflow.js';
+import { conditionResult, resolveActionValue } from './workflow.js';
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const copy = value => JSON.parse(JSON.stringify(value));
 
 /** Create a snapshot of the trial inputs. The caller keeps its own input objects. */
-export function startWorkflowDebug(flow, { fields = {}, selectedRecords = {}, breakpoints = [] } = {}) {
+export function startWorkflowDebug(flow, { fields = {}, selectedRecords = {}, eventContext = null, actions = [], breakpoints = [] } = {}) {
   if (!flow || !Array.isArray(flow.steps) || !flow.startStepId || typeof flow.id !== 'string') {
     throw new Error('Select a valid workflow before debugging');
   }
@@ -16,6 +16,8 @@ export function startWorkflowDebug(flow, { fields = {}, selectedRecords = {}, br
     currentStepId: flow.startStepId,
     fields: copy(fields),
     selectedRecords: copy(selectedRecords),
+    eventContext: eventContext ? copy(eventContext) : null,
+    actions: copy(actions),
     trace: [],
     effects: [],
     visitedIds: [],
@@ -59,6 +61,15 @@ export function stepWorkflowDebug(flow, state) {
       next.fields = {};
       next.selectedRecords = {};
       next.effects.push({ type: 'reset', simulated: true });
+    } else if (step.type === 'invoke_action') {
+      const action = next.actions.find(item => item.id === step.actionId && String(item.version) === step.actionVersion);
+      if (!action) throw new Error('Debugger action reference is missing or outdated');
+      const value = resolveActionValue(action, step, next);
+      if (action.kind === 'message') next.effects.push({type:'message',text:String(value),simulated:true});
+      else if (action.kind === 'set_field') {
+        next.fields[action.targetField] = value;
+        next.effects.push({type:'set_field',field:action.targetField,value,simulated:true});
+      } else throw new Error('Debugger does not support the selected action');
     } else if (step.type === 'set_field') {
       next.fields[step.field] = step.value;
       next.effects.push({ type: 'set_field', field: step.field, value: step.value, simulated: true });

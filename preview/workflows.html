@@ -10,6 +10,7 @@ const STEP_TYPES = [
   {type:'message',label:'Message',hint:'Show a message to the user'},
   {type:'reset',label:'Reset form',hint:'Clear form fields and selection'},
   {type:'set_field',label:'Set field',hint:'Assign a literal value to a form control'},
+  {type:'invoke_action',label:'Reusable action',hint:'Invoke a versioned, typed project action'},
   {type:'stop',label:'Stop',hint:'End this workflow'}
 ];
 const OPERATORS = [
@@ -24,6 +25,10 @@ const OPERATORS = [
 const types=new Set(STEP_TYPES.map(x=>x.type));
 const operators=new Set(OPERATORS.map(x=>x.value));
 const workflowPlain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const EVENT_VALUE_FIELD='@event.value';
+const ACTION_INPUT_TYPES=['string','number','boolean'];
+const ACTION_KINDS=['message','set_field'];
+const ACTION_SOURCES=['literal','field','event'];
 const uniqueId=prefix=>`${prefix}_${typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`}`;
 function createStep(type='message',id=uniqueId('step'),options={}) {
   if(!types.has(type))throw new Error(`Unsupported workflow step: ${type}`);
@@ -31,17 +36,89 @@ function createStep(type='message',id=uniqueId('step'),options={}) {
     condition:{field:'',operator:'filled',value:'',modelId:'',trueId:'',falseId:''},
     create:{modelId:'',nextId:''},update:{modelId:'',nextId:''},delete:{modelId:'',nextId:''},
     navigate:{pageId:'',nextId:''},message:{text:'Workflow message',nextId:''},
-    reset:{nextId:''},set_field:{field:'',value:'',nextId:''},stop:{}
+    reset:{nextId:''},set_field:{field:'',value:'',nextId:''},
+    invoke_action:{actionId:'',actionVersion:'1',inputSource:'literal',inputField:'',literal:'',nextId:''},stop:{}
   };
   return {id,type,...data[type],...options};
 }
-function createWorkflow(pageId,componentId,name='New workflow',id=uniqueId('workflow')) {
+const triggerEventsForType = type => type==='button'?['click']:['input','textarea'].includes(type)?['change','blur']:['select','checkbox'].includes(type)?['change']:[];
+
+/** Stable, JSON-only event contract shared by the editor and generated applications. */
+function eventContextForTrigger(flow,node,fields={}) {
+  if(!node||!triggerEventsForType(node.type).includes(flow.trigger.event))throw new Error('Invalid event source');
+  const event={pageId:flow.trigger.pageId,componentId:node.id,event:flow.trigger.event};
+  if(node.type!=='button'){
+    const field=node.props.field;
+    if(typeof field!=='string'||!field)throw new Error('Event source requires a form field');
+    const value=Object.hasOwn(fields,field)?fields[field]:node.type==='checkbox'?false:'';
+    if(node.type==='checkbox'?typeof value!=='boolean':typeof value!=='string'||value.length>10000)
+      throw new Error('Event value type does not match its component');
+    event.field=field;event.value=value;
+  }
+  return event;
+}
+/** Client event values are evidence of intent, not authentication; check against published form metadata. */
+function verifyEventContext(flow,node,fields,provided){
+  const expected=eventContextForTrigger(flow,node,fields);
+  if(provided===undefined)return expected; // v1.2 clients remain compatible.
+  if(!workflowPlain(provided)||Object.keys(provided).length!==Object.keys(expected).length||
+     Object.keys(provided).some(key=>!Object.hasOwn(expected,key)||provided[key]!==expected[key]))
+    throw new Error('Event context does not match the published component and form values');
+  if(node.type!=='button'&&!Object.hasOwn(fields,node.props.field))
+    throw new Error('Event context requires the source form field');
+  return expected;
+}
+/** Actions are versioned named recipes, never scripts or caller-supplied SQL. */
+function createActionDefinition(name='New action',id=uniqueId('action')){
+  return {id,name,version:1,kind:'message',inputType:'string',targetField:''};
+}
+function validateActionDefinitions(project){
+  const definitions=project.actions??[];
+  if(!Array.isArray(definitions)||definitions.length>40)throw new Error('Invalid reusable action library');
+  const ids=new Set();
+  for(const action of definitions){
+    if(!workflowPlain(action)||Object.keys(action).some(key=>!['id','name','version','kind','inputType','targetField'].includes(key))||
+       typeof action.id!=='string'||!action.id||action.id.length>120||ids.has(action.id)||
+       typeof action.name!=='string'||!action.name.trim()||action.name.length>120||
+       !Number.isSafeInteger(action.version)||action.version<1||action.version>100000||
+       !ACTION_KINDS.includes(action.kind)||!ACTION_INPUT_TYPES.includes(action.inputType)||
+       typeof action.targetField!=='string'||action.targetField.length>120||
+       action.kind==='message'&&action.targetField!==''||
+       action.kind==='set_field'&&!action.targetField)
+      throw new Error('Invalid reusable action definition');
+    ids.add(action.id);
+  }
+  return new Map(definitions.map(a=>[a.id,a]));
+}
+function resolveActionValue(action,step,context){
+  if(!ACTION_SOURCES.includes(step.inputSource))throw new Error('Unknown reusable action input source');
+  let raw;
+  if(step.inputSource==='event'){
+    if(!context.eventContext||!Object.hasOwn(context.eventContext,'value'))throw new Error('Event has no value');
+    raw=context.eventContext.value;
+  }else if(step.inputSource==='field'){
+    if(!Object.hasOwn(context.fields??{},step.inputField))throw new Error('Action input field is unavailable');
+    raw=context.fields[step.inputField];
+  }else if(action.inputType==='boolean'){
+    if(!['true','false'].includes(step.literal))throw new Error('Boolean action literal must be true or false');
+    raw=step.literal==='true';
+  }else if(action.inputType==='number'){
+    if(!step.literal.trim()||!Number.isFinite(Number(step.literal)))throw new Error('Numeric action literal must be finite');
+    raw=Number(step.literal);
+  }else raw=step.literal;
+  if(typeof raw!==action.inputType||typeof raw==='number'&&!Number.isFinite(raw)||
+     typeof raw==='string'&&raw.length>10000)throw new Error('Reusable action input type mismatch');
+  return raw;
+}
+
+function createWorkflow(pageId,componentId,name='New workflow',id=uniqueId('workflow'),event='click') {
   const step=createStep('message');
-  return {id,name,trigger:{pageId,componentId,event:'click'},startStepId:step.id,steps:[step]};
+  return {id,name,trigger:{pageId,componentId,event},startStepId:step.id,steps:[step]};
 }
-function workflowForButton(project,pageId,componentId) {
-  return (project.workflows??[]).find(w=>w.trigger.pageId===pageId&&w.trigger.componentId===componentId);
+function workflowForTrigger(project,pageId,componentId,event='click') {
+  return (project.workflows??[]).find(w=>w.trigger.pageId===pageId&&w.trigger.componentId===componentId&&w.trigger.event===event);
 }
+function workflowForButton(project,pageId,componentId) {return workflowForTrigger(project,pageId,componentId,'click');}
 function stepTargets(step) {return step.type==='condition'?[step.trueId,step.falseId].filter(Boolean):step.type==='stop'?[]:step.nextId?[step.nextId]:[];}
 /** Strict graph integrity and references. Each step is reachable and workflows are acyclic. */
 function validateWorkflows(project,walkNodes) {
@@ -49,23 +126,27 @@ function validateWorkflows(project,walkNodes) {
   const workflowIds=new Set(),triggers=new Set();
   const pages=new Map(project.pages.map(p=>[p.id,p]));
   const models=new Set(project.models.map(m=>m.id));
+  const actions=validateActionDefinitions(project);
   for(const flow of project.workflows){
     if(!workflowPlain(flow)||typeof flow.id!=='string'||!flow.id||flow.id.length>120||workflowIds.has(flow.id))throw new Error('Invalid or duplicate workflow ID');
     workflowIds.add(flow.id);
     if(typeof flow.name!=='string'||!flow.name.trim()||flow.name.length>120)throw new Error('Invalid workflow name');
-    if(!workflowPlain(flow.trigger)||flow.trigger.event!=='click'||typeof flow.trigger.pageId!=='string'||typeof flow.trigger.componentId!=='string')throw new Error('Workflow needs a button click trigger');
+    if(!workflowPlain(flow.trigger)||typeof flow.trigger.event!=='string'||typeof flow.trigger.pageId!=='string'||typeof flow.trigger.componentId!=='string')throw new Error('Workflow needs a valid component event trigger');
     const sourcePage=pages.get(flow.trigger.pageId);
     if(!sourcePage)throw new Error('Workflow trigger page does not exist');
-    const buttonIds=new Set(),fields=new Set();
-    walkNodes(sourcePage.components,node=>{if(node.type==='button')buttonIds.add(node.id);if(['input','textarea','checkbox','select'].includes(node.type))fields.add(node.props.field);});
-    if(!buttonIds.has(flow.trigger.componentId))throw new Error('Workflow trigger button is missing');
-    const key=`${flow.trigger.pageId}/${flow.trigger.componentId}`;
-    if(triggers.has(key))throw new Error('Only one workflow may be assigned to a button');
+    const controlEvents=new Map(),fields=new Set(),fieldTypes=new Map(),controls=new Map();
+    walkNodes(sourcePage.components,node=>{controlEvents.set(node.id,triggerEventsForType(node.type));controls.set(node.id,node);if(['input','textarea','checkbox','select'].includes(node.type)){fields.add(node.props.field);fieldTypes.set(node.props.field,node.type==='checkbox'?'boolean':'string');}});
+    if(!controlEvents.get(flow.trigger.componentId)?.includes(flow.trigger.event))throw new Error('Workflow trigger button or supported component event is missing');
+    const triggerNode=controls.get(flow.trigger.componentId);
+    const hasEventValue=triggerNode.type!=='button';
+    const eventType=triggerNode.type==='checkbox'?'boolean':'string';
+    const key=`${flow.trigger.pageId}/${flow.trigger.componentId}/${flow.trigger.event}`;
+    if(triggers.has(key))throw new Error('Only one workflow may be assigned to a component event');
     triggers.add(key);
     if(!Array.isArray(flow.steps)||flow.steps.length<1||flow.steps.length>80)throw new Error('A workflow requires 1–80 steps');
     if(typeof flow.startStepId!=='string'||!flow.startStepId)throw new Error('Workflow requires a starting step');
     const byId=new Map();
-    const keys={condition:['id','type','field','operator','value','modelId','trueId','falseId'],create:['id','type','modelId','nextId'],update:['id','type','modelId','nextId'],delete:['id','type','modelId','nextId'],navigate:['id','type','pageId','nextId'],message:['id','type','text','nextId'],reset:['id','type','nextId'],set_field:['id','type','field','value','nextId'],stop:['id','type']};
+    const keys={condition:['id','type','field','operator','value','modelId','trueId','falseId'],create:['id','type','modelId','nextId'],update:['id','type','modelId','nextId'],delete:['id','type','modelId','nextId'],navigate:['id','type','pageId','nextId'],message:['id','type','text','nextId'],reset:['id','type','nextId'],set_field:['id','type','field','value','nextId'],invoke_action:['id','type','actionId','actionVersion','inputSource','inputField','literal','nextId'],stop:['id','type']};
     for(const step of flow.steps) {
       if(!workflowPlain(step)||typeof step.id!=='string'||!step.id||step.id.length>120||byId.has(step.id)||!types.has(step.type))throw new Error('Invalid or duplicate workflow step');
       if(Object.keys(step).some(k=>!keys[step.type].includes(k))||keys[step.type].some(k=>!Object.hasOwn(step,k)))throw new Error('Invalid workflow step properties');
@@ -73,10 +154,20 @@ function validateWorkflows(project,walkNodes) {
       if(['create','update','delete'].includes(step.type)&&!models.has(step.modelId))throw new Error('Workflow data step needs a valid model');
       if(step.type==='navigate'&&!pages.has(step.pageId))throw new Error('Workflow navigation page is missing');
       if(step.type==='message'&&!step.text.trim())throw new Error('Workflow message cannot be empty');
+      if(step.type==='invoke_action'){
+        const action=actions.get(step.actionId);
+        if(!action||step.actionVersion!==String(action.version))throw new Error('Reusable action reference or version is invalid');
+        if(action.kind==='set_field'&&(!fields.has(action.targetField)||fieldTypes.get(action.targetField)!==action.inputType))throw new Error('Reusable action target field is missing or has an incompatible type');
+        if(!ACTION_SOURCES.includes(step.inputSource))throw new Error('Invalid reusable action input source');
+        if(step.inputSource==='event'&&(!hasEventValue||action.inputType!==eventType))throw new Error('Reusable action event value type is incompatible with trigger');
+        if(step.inputSource==='field'&&(!fields.has(step.inputField)||fieldTypes.get(step.inputField)!==action.inputType))throw new Error('Reusable action field input type is incompatible');
+        if(step.inputSource==='literal')resolveActionValue(action,step,{fields:{}});
+      }
       if(step.type==='set_field'&&!fields.has(step.field))throw new Error('Workflow set-field target is not a form control');
       if(step.type==='condition') {
         if(!operators.has(step.operator))throw new Error('Invalid workflow condition operator');
         if(step.operator==='selected'){if(!models.has(step.modelId))throw new Error('Record selection condition needs a model');}
+        else if(step.field===EVENT_VALUE_FIELD){if(!hasEventValue)throw new Error('Event value condition requires a value-bearing trigger');}
         else if(!fields.has(step.field))throw new Error('Workflow condition must reference a form field');
       }
       byId.set(step.id,step);
@@ -123,7 +214,7 @@ function removeWorkflowStep(flow,id) {
 }
 function conditionResult(step,context){
   if(step.operator==='selected')return Boolean(context.selectedRecords?.[step.modelId]);
-  const raw=context.fields?.[step.field],text=String(raw??'');
+  const raw=step.field===EVENT_VALUE_FIELD?context.eventContext?.value:context.fields?.[step.field],text=String(raw??'');
   if(step.operator==='filled')return raw!==null&&raw!==undefined&&text.trim()!==''&&raw!==false;
   if(step.operator==='empty')return raw===null||raw===undefined||text.trim()===''||raw===false;
   if(step.operator==='equals')return text===step.value;
@@ -133,7 +224,7 @@ function conditionResult(step,context){
   return step.operator==='greater_than'?left>right:left<right;
 }
 /** Runs an already validated graph via explicit, caller-supplied capabilities. */
-async function executeWorkflow(flow,context,handlers,{maxSteps=80}={}) {
+async function executeWorkflow(flow,context,handlers,{maxSteps=80,actions=[]}={}) {
   if(!Number.isInteger(maxSteps)||maxSteps<1||maxSteps>100)throw new Error('Invalid workflow step limit');
   const nodes=new Map(flow.steps.map(s=>[s.id,s]));
   const seen=new Set(),trace=[];let current=flow.startStepId;
@@ -149,6 +240,14 @@ async function executeWorkflow(flow,context,handlers,{maxSteps=80}={}) {
     else if(step.type==='message')await handlers.message(step.text);
     else if(step.type==='reset'){await handlers.reset();context.fields={};context.selectedRecords={};}
     else if(step.type==='set_field'){await handlers.setField(step.field,step.value);context.fields={...context.fields,[step.field]:step.value};}
+    else if(step.type==='invoke_action'){
+      const action=actions.find(x=>x.id===step.actionId&&String(x.version)===step.actionVersion);
+      if(!action)throw new Error('Reusable action reference has changed');
+      const value=resolveActionValue(action,step,context);
+      if(action.kind==='message')await handlers.message(String(value));
+      else if(action.kind==='set_field'){await handlers.setField(action.targetField,value);context.fields={...context.fields,[action.targetField]:value};}
+      else throw new Error('Unsupported reusable action');
+    }
     else if(step.type==='stop')break;
     else throw new Error('Unsupported workflow step');
     current=step.nextId;
@@ -248,7 +347,7 @@ function createProject() {
     createStep('message','step_customer_created',{text:'Customer saved successfully.',nextId:''}),
     createStep('message','step_name_required',{text:'Please enter the customer name.',nextId:''})
   ]};
-  return {schemaVersion:SCHEMA_VERSION,id:'app_starter',name:'Customer Workspace',models:[customer,order],workflows:[flow],pages:[
+  return {schemaVersion:SCHEMA_VERSION,id:'app_starter',name:'Customer Workspace',models:[customer,order],workflows:[flow],actions:[],pages:[
     {id:dashboard,name:'Overview',path:'/',components:[
       {...createComponent('heading','component_overview_heading'),props:{text:'Customer Workspace',level:1}},section,
       {...createComponent('button','component_overview_navigate'),props:{text:'Create a customer',variant:'primary',action:'navigate',targetPageId:customers,bindingModelId:''}}
@@ -313,8 +412,117 @@ function removeNode(page,id) {
 }
 function duplicateNode(node) {
   const copy=cloneProject(node);
-  walkNodes([copy],n=>{n.id=createId('component');});
+  walkNodes([copy],n=>{n.id=createId('component');delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;});
   return copy;
+}
+/** Copy a component subtree into the project's reusable library. No workflow triggers are copied. */
+function saveComponentTemplate(project,node,name,id=createId('template')) {
+  const title=String(name??'').trim();
+  if(!title||title.length>120)throw new Error('Template name must be 1–120 characters');
+  if(!Array.isArray(project.templates))project.templates=[];
+  if(project.templates.length>=40)throw new Error('A project may have at most 40 templates');
+  if(project.templates.some(t=>t.id===id))throw new Error('Duplicate template ID');
+  const template={id,name:title,node:duplicateNode(node)};
+  project.templates.push(template);
+  return template;
+}
+/** Insert an independent copy: all nested component IDs are regenerated. */
+function insertComponentTemplate(project,templateId,pageId,parentId='',index) {
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template)throw new Error('Reusable component not found');
+  const page=project.pages.find(p=>p.id===pageId);
+  if(!page)throw new Error('Destination page not found');
+  const node=duplicateNode(template.node);
+  insertNode(page,node,parentId,index);
+  return node;
+}
+function deleteComponentTemplate(project,id) {
+  if(!project.templates?.some(t=>t.id===id))throw new Error('Reusable component not found');
+  if(project.pages.some(page=>{let found=false;walkNodes(page.components,n=>{if(n.sourceTemplateId===id)found=true;});return found;}))throw new Error('Detach linked instances before deleting the master');
+  project.templates=project.templates.filter(t=>t.id!==id);
+}
+/** Linked instances inherit master properties and retain only explicit local overrides. */
+function insertLinkedTemplate(project,templateId,pageId,parentId='',index){
+  const template=project.templates?.find(t=>t.id===templateId);
+  const page=project.pages.find(p=>p.id===pageId);
+  if(!template||!page)throw new Error('Reusable component or destination page not found');
+  if(parentId&&findLinkedInstance(page,parentId))throw new Error('Detach a linked component before adding children');
+  const node=cloneProject(template.node);
+  walkNodes([node],n=>{n.sourceTemplateNodeId=n.id;n.id=createId('component');});
+  node.sourceTemplateId=templateId;
+  insertNode(page,node,parentId,index);
+  return node;
+}
+function findLinkedInstance(page,nodeId){
+  function inspect(nodes,root=null){
+    for(const node of nodes){
+      const linked=node.sourceTemplateId?node:root;
+      if(node.id===nodeId)return linked?{root:linked,node,templateId:linked.sourceTemplateId}:null;
+      if(node.children){const result=inspect(node.children,linked);if(result)return result;}
+    }
+    return null;
+  }
+  return inspect(page.components);
+}
+function assertOverrideValues(templateNode,patch){
+  if(!plain(patch))throw new Error('Instance overrides must be an object');
+  for(const [key,value] of Object.entries(patch)){
+    if(!Object.hasOwn(templateNode.props,key)||typeof value!==typeof templateNode.props[key]||
+       key.length>120||(typeof value==='string'&&value.length>10000)||
+       (typeof value==='number'&&!Number.isFinite(value)))throw new Error('Invalid reusable component override');
+  }
+}
+function synchronizeLinkedTemplates(project,templateId){
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template)throw new Error('Reusable master component not found');
+  function update(node,master){
+    if(node.sourceTemplateNodeId!==master.id||node.type!==master.type)throw new Error('Linked component structure differs from master; detach before changing structure');
+    const patch=node.overrides??{};assertOverrideValues(master,patch);
+    node.props={...cloneProject(master.props),...patch};
+    if(master.children){
+      if(!Array.isArray(node.children)||node.children.length!==master.children.length)throw new Error('Linked component structure differs from master');
+      for(let i=0;i<master.children.length;i++)update(node.children[i],master.children[i]);
+    }else if(node.children!==undefined)throw new Error('Linked component leaf has children');
+  }
+  for(const page of project.pages)walkNodes(page.components,node=>{
+    if(node.sourceTemplateId===templateId)update(node,template.node);
+  });
+}
+function editMasterProperties(project,templateId,sourceNodeId,patch){
+  const template=project.templates?.find(t=>t.id===templateId);
+  if(!template)throw new Error('Reusable master component not found');
+  let found;walkNodes([template.node],n=>{if(n.id===sourceNodeId)found=n;});
+  if(!found)throw new Error('Reusable master node not found');
+  assertOverrideValues(found,patch);
+  Object.assign(found.props,patch);
+  synchronizeLinkedTemplates(project,templateId);
+}
+function overrideLinkedProperties(project,pageId,nodeId,patch){
+  const page=project.pages.find(p=>p.id===pageId);
+  const linked=page&&findLinkedInstance(page,nodeId);
+  if(!linked)throw new Error('Selected component is not linked');
+  const template=project.templates?.find(t=>t.id===linked.templateId);
+  let master;walkNodes([template.node],n=>{if(n.id===linked.node.sourceTemplateNodeId)master=n;});
+  if(!master)throw new Error('Linked master node is missing');
+  assertOverrideValues(master,patch);
+  const local={...(linked.node.overrides??{})};
+  for(const [key,value] of Object.entries(patch)){
+    if(value===master.props[key])delete local[key];else local[key]=value;
+  }
+  if(Object.keys(local).length)linked.node.overrides=local;else delete linked.node.overrides;
+  synchronizeLinkedTemplates(project,linked.templateId);
+}
+function resetLinkedOverrides(project,pageId,nodeId){
+  const linked=findLinkedInstance(project.pages.find(p=>p.id===pageId),nodeId);
+  if(!linked)throw new Error('Selected component is not linked');
+  delete linked.node.overrides;
+  synchronizeLinkedTemplates(project,linked.templateId);
+}
+function detachLinkedInstance(page,nodeId){
+  const linked=findLinkedInstance(page,nodeId);
+  if(!linked)throw new Error('Component is not linked');
+  walkNodes([linked.root],n=>{delete n.sourceTemplateId;delete n.sourceTemplateNodeId;delete n.overrides;});
+  return linked.root;
 }
 function moveComponent(components,fromIndex,toIndex) {
   if(!Number.isInteger(fromIndex)||!Number.isInteger(toIndex)||fromIndex<0||fromIndex>=components.length||toIndex<0||toIndex>components.length)throw new Error('Invalid move indices');
@@ -378,6 +586,58 @@ function validateProject(project) {
       }
     };check(page.components,0);
   }
+  // Optional in schema v3: older published project documents remain byte-for-byte compatible.
+  if(project.templates!==undefined){
+    if(!Array.isArray(project.templates)||project.templates.length>40)throw new Error('Invalid reusable component library');
+    const templateIds=new Set();
+    for(const template of project.templates){
+      if(!plain(template)||typeof template.id!=='string'||!template.id||template.id.length>120||templateIds.has(template.id)||
+          typeof template.name!=='string'||!template.name.trim()||template.name.length>120||!plain(template.node))throw new Error('Invalid or duplicate reusable component');
+      templateIds.add(template.id);
+      const ids=new Set();let count=0;
+      function checkTemplateNode(node,depth){
+        if(++count>100||depth>7)throw new Error('Reusable component exceeds size or nesting limit');
+        if(!plain(node)||typeof node.id!=='string'||!node.id||ids.has(node.id)||!COMPONENT_TYPES.includes(node.type)||!plain(node.props))throw new Error('Invalid reusable component tree');
+        ids.add(node.id);
+        for(const [key,value] of Object.entries(node.props))if(key.length>120||!['string','number','boolean'].includes(typeof value)||(typeof value==='string'&&value.length>10000))throw new Error('Invalid reusable component property');
+        if(CONTAINER_TYPES.includes(node.type)){
+          if(!Array.isArray(node.children))throw new Error('Reusable container must have children');
+          for(const child of node.children)checkTemplateNode(child,depth+1);
+        }else if(node.children!==undefined)throw new Error('Reusable leaf cannot have children');
+        if(node.props.bindingModelId||node.props.bindingFieldId){
+          const model=modelLookup.get(node.props.bindingModelId);
+          if(!model||(['input','textarea','select','checkbox'].includes(node.type)&&!model.fields.some(f=>f.id===node.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(node.type)&&node.props.bindingFieldId))throw new Error('Broken reusable component binding');
+        }
+        if(node.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(node.props.action))throw new Error('Invalid reusable button action');
+      }
+      checkTemplateNode(template.node,0);
+    }
+  }
+  // Linked instance roots and descendants must resolve to an existing master.
+  const templateMap=new Map((project.templates??[]).map(t=>[t.id,t]));
+  function validateLinkedNode(node,master,root){
+    if(node.sourceTemplateNodeId!==master.id||node.type!==master.type||
+       (root?node.sourceTemplateId===undefined:node.sourceTemplateId!==undefined))throw new Error('Invalid linked reusable component structure');
+    const overrides=node.overrides??{};assertOverrideValues(master,overrides);
+    const effective={...master.props,...overrides};
+    if(Object.keys(node.props).length!==Object.keys(effective).length||
+       Object.entries(effective).some(([key,value])=>node.props[key]!==value))throw new Error('Linked reusable properties differ from the master');
+    if(master.children){
+      if(!Array.isArray(node.children)||node.children.length!==master.children.length)throw new Error('Linked reusable component structure mismatch');
+      for(let i=0;i<master.children.length;i++)validateLinkedNode(node.children[i],master.children[i],false);
+    }else if(node.children!==undefined)throw new Error('Linked reusable leaf cannot have children');
+  }
+  function checkRoots(nodes){
+    for(const node of nodes){
+      if(node.sourceTemplateId!==undefined){
+        const master=templateMap.get(node.sourceTemplateId);
+        if(!master)throw new Error('Missing reusable component master');
+        validateLinkedNode(node,master.node,true);
+      }else if(node.sourceTemplateNodeId!==undefined||node.overrides!==undefined)throw new Error('Orphaned linked reusable component metadata');
+      else if(node.children)checkRoots(node.children);
+    }
+  }
+  for(const page of project.pages)checkRoots(page.components);
   validateWorkflows(project,walkNodes);
   return project;
 }
