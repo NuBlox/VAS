@@ -1,11 +1,12 @@
 <script>
   import '../app.css';
   import { onMount } from 'svelte';
-  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes } from '#lib/studio/model.js';
+  import { CATALOG, CONTAINER_TYPES, FIELD_TYPES, createProject, createComponent, createId, createField, createModel, cloneProject, validateProject, migrateProject, findNodeLocation, insertNode, moveNode, removeNode, duplicateNode, walkNodes, saveComponentTemplate, insertComponentTemplate, deleteComponentTemplate } from '#lib/studio/model.js';
   import { exportPageToSvelte, exportMySQL } from '#lib/studio/compiler.js';
   import { projectRevision } from '#lib/studio/revision.js';
   import { validateRecord } from '#lib/studio/records.js';
   import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow } from '#lib/studio/workflow.js';
+  import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug } from '#lib/studio/debugger.js';
 
   const STORE='visual-application-studio-v1';
   const properties={
@@ -33,6 +34,10 @@
   let newStepType=$state('message');
   let newStepBranch=$state('true');
   let workflowTrace=$state([]);
+  let templateName=$state('');
+  let debugInputs=$state({});
+  let debugSelectedRecords=$state({});
+  let debugSession=$state(null);
   let pendingWorkflowRequest=null; // Transient network retry state; not persisted across browser reloads.
   let mode=$state('design');
   let viewport=$state('desktop');
@@ -57,14 +62,14 @@
 
   onMount(()=>{void (async()=>{
     let saved=false;
-    try {const raw=localStorage.getItem(STORE);if(raw){project=validateProject(migrateProject(JSON.parse(raw)));saved=true;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}}
+    try {const raw=localStorage.getItem(STORE);if(raw){project=validateProject(migrateProject(JSON.parse(raw)));debugSession=null;saved=true;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}}
     catch(e){notice=`Unable to restore project: ${e.message}`;}
     try {
       const response=await fetch('/api/runtime');
       if(response.ok)runtimeState=await response.json();
       if(runtimeState.enabled&&!saved){
         const published=await fetch('/api/runtime/project');
-        if(published.ok){project=validateProject(migrateProject(await published.json()));activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}
+        if(published.ok){project=validateProject(migrateProject(await published.json()));debugSession=null;activeId=project.pages[0].id;activeModelId=project.models[0]?.id??'';activeWorkflowId=project.workflows[0]?.id??'';activeStepId=project.workflows[0]?.startStepId??'';}
       }
     }catch{runtimeState={enabled:false,projectId:'',revision:'',reason:'Runtime not available'};}
     hydrated=true;
@@ -98,14 +103,14 @@
 
   function change(fn){
     const next=cloneProject(project);fn(next);validateProject(next);
-    previous=[...previous.slice(-39),cloneProject(project)];upcoming=[];project=next;
+    previous=[...previous.slice(-39),cloneProject(project)];upcoming=[];project=next;debugSession=null;
   }
   function safe(fn){try{change(fn);notice='';}catch(e){notice=e.message;}}
-  function undo(){if(!previous.length)return;upcoming=[...upcoming,cloneProject(project)];project=previous.at(-1);previous=previous.slice(0,-1);selectedId='';activeFieldId='';}
-  function redo(){if(!upcoming.length)return;previous=[...previous,cloneProject(project)];project=upcoming.at(-1);upcoming=upcoming.slice(0,-1);selectedId='';activeFieldId='';}
+  function undo(){if(!previous.length)return;upcoming=[...upcoming,cloneProject(project)];project=previous.at(-1);previous=previous.slice(0,-1);selectedId='';activeFieldId='';debugSession=null;}
+  function redo(){if(!upcoming.length)return;previous=[...previous,cloneProject(project)];project=upcoming.at(-1);upcoming=upcoming.slice(0,-1);selectedId='';activeFieldId='';debugSession=null;}
   function selectPage(id){tab='pages';activeId=id;selectedId='';fields={};notice='';if(runtimeMode==='mysql')void refreshLive();}
   function selectData(){tab='data';mode='design';selectedId='';activeModelId=project.models[0]?.id??'';activeFieldId='';notice='';}
-  function selectWorkflows(id=activeWorkflowId){tab='workflows';mode='design';selectedId='';activeWorkflowId=id||project.workflows[0]?.id||'';activeStepId=project.workflows.find(w=>w.id===activeWorkflowId)?.startStepId??'';notice='';}
+  function selectWorkflows(id=activeWorkflowId){tab='workflows';mode='design';selectedId='';activeWorkflowId=id||project.workflows[0]?.id||'';activeStepId=project.workflows.find(w=>w.id===activeWorkflowId)?.startStepId??'';debugSession=null;debugInputs={};debugSelectedRecords={};notice='';}
   function createWorkflowFromButton(pageId=activeId,componentId=''){
     const trigger=componentId?{pageId,componentId}:allTriggers.find(t=>!project.workflows.some(w=>w.trigger.pageId===t.pageId&&w.trigger.componentId===t.id));
     if(!trigger){notice='Add an unassigned button to a page before creating another workflow.';return;}
@@ -162,6 +167,34 @@
     if(s.type==='set_field')return `${s.field} = ${s.value}`;
     return s.type==='reset'?'Clear current form':'End';
   }
+  function beginDebugSession(){
+    if(!activeWorkflow)return;
+    try{debugSession=startWorkflowDebug(activeWorkflow,{fields:debugInputs,selectedRecords:debugSelectedRecords});activeStepId=activeWorkflow.startStepId;notice='';}
+    catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function stepDebug(){
+    if(!activeWorkflow||!debugSession)return;
+    try{const next=stepWorkflowDebug(activeWorkflow,debugSession);debugSession=next;activeStepId=next.trace.at(-1)?.stepId??activeStepId;}
+    catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function finishDebug(){
+    if(!activeWorkflow||!debugSession)return;
+    try{const next=finishWorkflowDebug(activeWorkflow,debugSession);debugSession=next;activeStepId=next.trace.at(-1)?.stepId??activeStepId;}
+    catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function saveSelectedTemplate(){
+    if(!selected)return;
+    const name=templateName.trim()||selected.props.title||selected.props.text||CATALOG.find(x=>x.type===selected.type)?.label||selected.type;
+    let saved;
+    safe(p=>{const current=findNodeLocation(p.pages.find(pg=>pg.id===activeId),selectedId)?.node;if(!current)throw new Error('Select a component');saved=saveComponentTemplate(p,current,name);});
+    if(saved&&!notice){templateName='';notice=`Saved “${saved.name}” to the reusable component library.`;}
+  }
+  function insertSavedTemplate(id,parentId='',index){
+    let inserted;
+    safe(p=>{inserted=insertComponentTemplate(p,id,activeId,parentId,index);});
+    if(inserted&&!notice){selectedId=inserted.id;mode='design';notice='Reusable component inserted with fresh IDs. Button workflows are not copied.';}
+  }
+  function deleteSavedTemplate(id){safe(p=>deleteComponentTemplate(p,id));}
   function addPage(){const id=createId('page');change(p=>p.pages.push({id,name:`New page ${p.pages.length+1}`,path:`/page-${p.pages.length+1}`,components:[createComponent('heading')]}));selectPage(id);}
   function deletePage(){if(project.pages.length<2)return;change(p=>{p.pages=p.pages.filter(x=>x.id!==activeId);});selectPage(project.pages[0].id);}
   function addComponent(type,parentId='',index){
@@ -198,6 +231,7 @@
   function onDrop(e,parentId,index){e.preventDefault();e.stopPropagation();if(mode!=='design'||tab!=='pages')return;
     const tag=e.dataTransfer?.getData('text/plain')??'';
     if(tag.startsWith('new:')){const type=tag.slice(4);if(CATALOG.some(c=>c.type===type))addComponent(type,parentId,index);}
+    else if(tag.startsWith('template:'))insertSavedTemplate(tag.slice(9),parentId,index);
     else if(tag.startsWith('move:'))safe(p=>moveNode(p.pages.find(x=>x.id===activeId),tag.slice(5),parentId,index));
   }
   function requiredNodes(){const nodes=[];walkNodes(page.components,c=>{if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.required&&!fields[c.props.field])nodes.push(c);});return nodes;}
@@ -350,7 +384,7 @@
     if(!runtimeState.enabled)return;
     if(!confirm('Replace the browser editor project with the locally published application? Export any unsaved work first.'))return;
     try{const response=await fetch('/api/runtime/project');if(!response.ok)throw new Error('Published project unavailable');
-      const next=validateProject(migrateProject(await response.json()));project=next;activeId=next.pages[0].id;activeModelId=next.models[0]?.id??'';activeWorkflowId=next.workflows[0]?.id??'';activeStepId=next.workflows[0]?.startStepId??'';previous=[];upcoming=[];selectedId='';fields={};liveRecords={};selectedRecords={};runtimeMode='memory';notice='Published project loaded. Open Preview and choose MySQL (local).';
+      const next=validateProject(migrateProject(await response.json()));project=next;debugSession=null;activeId=next.pages[0].id;activeModelId=next.models[0]?.id??'';activeWorkflowId=next.workflows[0]?.id??'';activeStepId=next.workflows[0]?.startStepId??'';previous=[];upcoming=[];selectedId='';fields={};liveRecords={};selectedRecords={};runtimeMode='memory';notice='Published project loaded. Open Preview and choose MySQL (local).';
     }catch(e){notice=e.message;}
   }
   function addModel(){const n=project.models.length+1, id=createId('model');safe(p=>p.models.push(createModel(`Model ${n}`,`model_${n}`,id)));if(!notice){activeModelId=id;activeFieldId='';}}
@@ -437,7 +471,7 @@
 
 <div class="studio" class:workflow-view={tab==='workflows'}>
   <header class="topbar">
-    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · alpha 0.6</small></div></div>
+    <div class="identity"><span class="logo">◧</span><div><strong>Visual Application Studio</strong><small>Visual app building · v1.1</small></div></div>
     <div class="project"><span class="status-dot"></span><input aria-label="Project name" value={project.name} onchange={e=>safe(p=>p.name=e.currentTarget.value)} /></div>
     <nav class="actions" aria-label="Project actions">
       <button onclick={undo} disabled={!previous.length} title="Undo">↶</button>
@@ -490,6 +524,15 @@
             <button class="tool" draggable="true" ondragstart={e=>beginDrag(e,`new:${item.type}`)} onclick={()=>addComponent(item.type,selected&&CONTAINER_TYPES.includes(selected.type)?selected.id:'')}><span class="tool-icon">{item.icon}</span>{item.label}</button>
           {/each}</div>
         {/each}</div>
+        <div class="sidebar-head"><span>REUSABLE COMPONENTS</span><small>{project.templates?.length??0} saved</small></div>
+        <div class="template-list">
+          {#each project.templates??[] as template (template.id)}
+            <div class="template-item">
+              <button draggable="true" ondragstart={e=>beginDrag(e,`template:${template.id}`)} onclick={()=>insertSavedTemplate(template.id,selected&&CONTAINER_TYPES.includes(selected.type)?selected.id:'')} title="Insert a fresh copy of this reusable component">▧ {template.name}</button>
+              <button class="template-remove" aria-label={`Remove reusable component ${template.name}`} title="Remove from library" onclick={()=>deleteSavedTemplate(template.id)}>×</button>
+            </div>
+          {:else}<p class="sidebar-note">Select a component or layout and save it from Properties to reuse it across pages.</p>{/each}
+        </div>
       {:else if tab==='workflows'}
         <div class="sidebar-head"><span>WORKFLOWS</span><button onclick={()=>createWorkflowFromButton()} aria-label="Add workflow">+</button></div>
         <div class="project-tree workflow-list">{#each project.workflows as flow (flow.id)}<button class:active={activeWorkflowId===flow.id} onclick={()=>selectWorkflows(flow.id)}><span>◇</span>{flow.name}<small>{flow.steps.length} steps</small></button>{:else}<p class="sidebar-note">Add a button on a page, then create its click workflow.</p>{/each}</div>
@@ -552,13 +595,35 @@
                   {#each diagram.edges as edge (`${edge.from}-${edge.to}-${edge.kind}`)}<path d={edge.path} class:edge-true={edge.kind==='true'} class:edge-false={edge.kind==='false'} fill="none" stroke-width="2.5" />{/each}
                 </svg>
                 {#each diagram.nodes as node (node.id)}
-                  <button class="workflow-node" class:node-selected={activeStepId===node.id} class:node-condition={node.type==='condition'} style:left={`${node.x}px`} style:top={`${node.y}px`} onclick={()=>activeStepId=node.id}>
+                  <button class="workflow-node" class:node-selected={activeStepId===node.id} class:node-condition={node.type==='condition'} class:node-debug-next={debugSession?.currentStepId===node.id&&!debugSession.finished} class:node-debug-visited={Boolean(debugSession?.visitedIds.includes(node.id))} style:left={`${node.x}px`} style:top={`${node.y}px`} onclick={()=>activeStepId=node.id}>
                     <small>{node.id===activeWorkflow.startStepId?'▶ START · ':''}{STEP_TYPES.find(k=>k.type===node.type)?.label}</small>
                     <strong>{stepDescription(node)}</strong>
                     <span>{node.type==='condition'?`TRUE → ${node.trueId?'step':'END'}   |   FALSE → ${node.falseId?'step':'END'}`:node.type==='stop'?'END':node.nextId?'→ next step':'→ END'}</span>
                   </button>
                 {/each}
               </div></div>
+              <div class="debugger-panel" aria-label="Read-only workflow debugger">
+                <div class="debugger-heading"><div><strong>Step-through debugger</strong><p>Dry run only. Database writes, navigation, messages and form changes are simulated; nothing is sent to MySQL.</p></div><span>NO SIDE EFFECTS</span></div>
+                <div class="debugger-inputs">
+                  {#each flowFields as field (field)}
+                    <label>{field}<input aria-label={`Debug ${field}`} value={debugInputs[field]??''} oninput={e=>{debugInputs={...debugInputs,[field]:e.currentTarget.value};debugSession=null;}} placeholder="Test value" /></label>
+                  {/each}
+                  {#each project.models.filter(model=>activeWorkflow.steps.some(step=>step.type==='condition'&&step.operator==='selected'&&step.modelId===model.id)) as model (model.id)}
+                    <label class="debugger-selection"><input type="checkbox" checked={Boolean(debugSelectedRecords[model.id])} onchange={e=>{debugSelectedRecords={...debugSelectedRecords,[model.id]:e.currentTarget.checked?'example_record':''};debugSession=null;}} />{model.name} selected</label>
+                  {/each}
+                </div>
+                <div class="debugger-buttons"><button onclick={beginDebugSession}>Start / Reset</button><button onclick={stepDebug} disabled={!debugSession||debugSession.finished}>Step</button><button onclick={finishDebug} disabled={!debugSession||debugSession.finished}>Run to end</button>
+                  {#if debugSession}<span aria-live="polite">{debugSession.finished?'Complete':`Next: ${debugSession.currentStepId}`} · {debugSession.trace.length} executed</span>{/if}
+                </div>
+                {#if debugSession}
+                  <div class="debugger-results">
+                    <div><strong>Execution trace</strong>
+                      <ol>{#each debugSession.trace as item,i (i)}<li><code>{item.stepId}</code> · {item.type}{item.outcome?` · ${item.outcome.toUpperCase()}`:''}</li>{:else}<li>Ready to step from the starting node</li>{/each}</ol>
+                    </div>
+                    <div><strong>Simulated effects</strong><pre>{JSON.stringify(debugSession.effects,null,2)}</pre><strong>Trial form state</strong><pre>{JSON.stringify(debugSession.fields,null,2)}</pre></div>
+                  </div>
+                {/if}
+              </div>
               <div class="workflow-instructions"><strong>How it works</strong><span>Choose an action in the toolbar, click <b>Add step</b>, then select a card to change its targets and settings. Cyclic or broken paths are rejected automatically.</span></div>
             {:else}
               <div class="empty-state">No workflows yet. Create a button in the page designer, then click <b>+ Workflow</b> to connect visual logic to it.</div>
@@ -649,6 +714,10 @@
             <p class="hint">{workflowForButton(project,activeId,selected.id)?.name??'Uses the legacy button action until a workflow is connected.'}</p>
             <button class="model-add" onclick={()=>createWorkflowFromButton(activeId,selected.id)}>{workflowForButton(project,activeId,selected.id)?'Edit visual workflow':'+ Create visual workflow'}</button>
           {/if}
+          <div class="section-label">REUSABLE COMPONENT</div>
+          <label class="property-label">Library name<input value={templateName} placeholder={String(selected.props.title||selected.props.text||selected.type).slice(0,80)} oninput={e=>templateName=e.currentTarget.value} /></label>
+          <button class="model-add" onclick={saveSelectedTemplate}>Save selected component / layout</button>
+          <p class="hint">Saves a snapshot of this component and its children. Instances receive fresh IDs; click workflows must be connected separately.</p>
           {#if CONTAINER_TYPES.includes(selected.type)}<button class="model-add" onclick={()=>addComponent('text',selected.id)}>+ Add text inside</button>{/if}
           <div class="inspector-buttons"><button onclick={duplicateSelected}>Duplicate</button><button class="danger" onclick={deleteSelected}>Delete</button></div>
           <p class="hint">Drag into a layout on the canvas or click a container in the tree before adding components.</p>

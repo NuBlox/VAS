@@ -1,3 +1,30 @@
+# Visual Application Studio · v1.1 — Reusable Components & Visual Debugger
+
+Version 1.1 builds on the verified v1.0 signed-release foundation and improves the actual visual authoring experience.
+
+- **Reusable component library:** Select any component, section or nested columns layout in Pages & tree, give it a library name in Properties and choose **Save selected component / layout**. Insert an independent copy from the sidebar or drag the saved item onto a section. Instances get new IDs; edits do not change the saved snapshot. The library travels in project JSON, with no database migration.
+- **Safe import/export:** Saved components are optional `templates` metadata within schema v3 (the existing schema version). Older projects need no migration. Imported template trees are structurally validated, size-limited, and checked against existing model bindings; no scripts are accepted. Copied buttons deliberately **do not inherit click-workflow connections**. Bind a workflow to the new button explicitly.
+- **Step-through workflow debugger:** Open Workflows, select a flow, provide trial form values, optionally tick an example selected record, and choose **Start / Reset**, **Step**, or **Run to end**. The current node and visited path are marked on the graph. Inspect branch outcomes, simulated effects and trial field state. This is a pure read-only simulation: no SQL, API calls, real records, navigation, or user-authored code runs.
+- **Existing click bindings stay intact:** The Properties panel still connects buttons to visual click workflows. v1.1 does not claim arbitrary event types or breakpoint-driven live server debugging.
+
+## macOS development
+
+```bash
+git clone https://github.com/NuBlox/VAS.git ~/Developer/VAS
+cd ~/Developer/VAS
+npm install
+npm test
+npm run check
+npm run build
+npm run dev -- --host 127.0.0.1 --open
+```
+
+For an existing clone, inspect `git status` and run `git switch main && git pull --ff-only origin main` before the commands above. MySQL is **not required** to author pages, create templates or run the debugger. No SQL migration is introduced in this version; existing v1.0 MySQL configuration can be retained. The runtime remains intentionally localhost-only and not production-approved.
+
+Unit tests cover nested template independence, fresh IDs and binding constraints, true/false execution paths, simulated data actions, mutable field snapshots and cycle prevention. GitHub Actions separately runs Svelte static checks, a production build, MySQL integration and independent generated-application checks.
+
+---
+
 # Visual Application Studio · Alpha 1.0 — Signed Local Release Activation
 
 VAS 1.0 extends the generated application's deployment manager with Ed25519 publisher-signature provenance, independently provisioned trust keys, authenticated promotion and rollback, and explicit on-disk activation of a previously promoted release. Runtime activation prepares a release directory, verifies its integrity, and atomically switches a loopback-only `current` symlink. A separate command launches the activated version on 127.0.0.1. Full instructions are in `templates/standalone/deployment/README.md` and in each generated application's `deployment/README.md`.
