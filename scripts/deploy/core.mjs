@@ -193,8 +193,8 @@ export async function validateActivation({store,environment,trustedPublicPem,exp
   const activation=await json(join(root,'environments',environment,'activation.json'));
   ensure(activation.version===1 && HASH_RE.test(activation.releaseId),'Invalid activated release');
   if(expectedRelease) ensure(activation.releaseId===expectedRelease,'Activated release does not match expected release');
-  const state=await state(root,environment);
-  ensure(state.active===activation.releaseId && state.revision===activation.stateRevision,'Activation is stale; promote/rollback requires explicit reactivation');
+  const currentState=await state(root,environment);
+  ensure(currentState.active===activation.releaseId && currentState.revision===activation.stateRevision,'Activation is stale; promote/rollback requires explicit reactivation');
   const manifest=await artifact(root,activation.releaseId,trustedPublicPem);
   ensure(activation.artifactDigest===manifest.digest,'Activation artifact digest mismatch');
   const directory=join(root,'environments',environment);
@@ -203,7 +203,7 @@ export async function validateActivation({store,environment,trustedPublicPem,exp
   const deployed=join(directory,'deployments',activation.releaseId,'source');
   const actual=await digestDirectory(deployed);
   ensure(actual.digest===manifest.digest,'Activated runtime files have changed');
-  return {releaseId:activation.releaseId,path:deployed,artifactDigest:manifest.digest,stateRevision:state.revision};
+  return {releaseId:activation.releaseId,path:deployed,artifactDigest:manifest.digest,stateRevision:currentState.revision};
 }
 
 /** Materialize verified application files, prepare offline dependencies, atomically switch local runtime.
@@ -216,14 +216,14 @@ export async function activateRelease({store,environment,to,profile,trustedPubli
   ensure(HASH_RE.test(to),'Invalid target release');
   const root=resolve(store);
   return locked(root,async()=>{
-    const state=await state(root,environment);
-    ensure(state.active===to,'Release must first be promoted in the chosen environment');
+    const currentState=await state(root,environment);
+    ensure(currentState.active===to,'Release must first be promoted in the chosen environment');
     const manifest=await artifact(root,to,trustedPublicPem);
     const envRoot=join(root,'environments',environment);
     const deployment=join(envRoot,'deployments',to);
     const target=join(deployment,'source');
     const current=await optional(join(envRoot,'activation.json'),null);
-    if(current?.releaseId===to && current.stateRevision===state.revision) {
+    if(current?.releaseId===to && current.stateRevision===currentState.revision) {
       return {...await validateActivation({store:root,environment,trustedPublicPem,expectedRelease:to}),alreadyActivated:true};
     }
     await mkdir(join(envRoot,'deployments'),{recursive:true});
@@ -251,7 +251,7 @@ export async function activateRelease({store,environment,to,profile,trustedPubli
       await symlink(join('deployments',to,'source'),link,'dir');
       await rename(link,join(envRoot,'current'));
     }finally{await rm(link,{force:true});}
-    await atomic(join(envRoot,'activation.json'),{version:1,releaseId:to,artifactDigest:manifest.digest,stateRevision:state.revision,activatedAt:new Date().toISOString()});
+    await atomic(join(envRoot,'activation.json'),{version:1,releaseId:to,artifactDigest:manifest.digest,stateRevision:currentState.revision,activatedAt:new Date().toISOString()});
     return {...await validateActivation({store:root,environment,trustedPublicPem,expectedRelease:to}),alreadyActivated:false};
   });
 }
