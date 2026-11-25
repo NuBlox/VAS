@@ -172,10 +172,10 @@ export async function signRelease({store,releaseId,privatePem}) {
   ensure(privatePem,'Publisher private key required');
   const root=resolve(store);
   return locked(root,async()=>{
-    const artifact=await artifact(root,releaseId);
+    const releaseArtifact=await artifact(root,releaseId);
     const destination=join(root,'artifacts',releaseId,'signature.json');
     const previous=await optional(destination,null);
-    const proof=signArtifact(artifact,privatePem);
+    const proof=signArtifact(releaseArtifact,privatePem);
     if(previous) {
       ensure(JSON.stringify(previous)===JSON.stringify(proof),'Release has already been signed; cannot replace publisher signature');
       return proof;
