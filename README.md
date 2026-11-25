@@ -1,3 +1,11 @@
+# Visual Application Studio · Alpha 1.0 — Signed Local Release Activation
+
+VAS 1.0 extends the generated application's deployment manager with Ed25519 publisher-signature provenance, independently provisioned trust keys, authenticated promotion and rollback, and explicit on-disk activation of a previously promoted release. Runtime activation prepares a release directory, verifies its integrity, and atomically switches a loopback-only `current` symlink. A separate command launches the activated version on 127.0.0.1. Full instructions are in `templates/standalone/deployment/README.md` and in each generated application's `deployment/README.md`.
+
+**Still not production-ready:** no hosted identity, public deployment, service supervision, live process replacement, automatic migrations or database rollback. Version 1.0 refuses production and public bind profiles. A signature proves possession of an explicitly trusted private signing key; it does not independently establish a publisher's real-world identity. The v0.9 release ledger is preserved, but unsigned legacy artifacts must be re-staged and signed before trusted promotion.
+
+---
+
 # Visual Application Studio · Alpha 0.9 — Local Release Candidate Management
 
 Version 0.9 adds a verified **local-only release candidate store** for generated SvelteKit applications. After export and installation, `deploy:stage` verifies release identity, tests, Svelte analysis and build, then copies a source snapshot without secrets or dependencies. `deploy:promote` and `deploy:rollback` update a local activation manifest with integrity checks, immutable history and expected-current-release safeguards. See the generated application's `deployment/README.md` for exact commands. CI exercises the generated app's stage/promote/status lifecycle.

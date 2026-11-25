@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile, symlink, readlink } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
+import { signArtifact, verifyArtifactSignature } from './signing.mjs';
 
 export const ENVIRONMENTS = Object.freeze(['local', 'staging']);
 const EXCLUDED = new Set(['node_modules', '.git', '.svelte-kit', 'build', '.vas', 'coverage', '.DS_Store', 'exports', '.env']);
 const HASH_RE = /^[0-9a-f]{64}$/;
 const MAX_FILES = 5000, MAX_FILE_SIZE = 8 * 1024 * 1024, MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
 function ensure(ok, message) { if (!ok) throw Error(message); }
-function excluded(name) { return EXCLUDED.has(name) || name.startsWith('.env.') || name.endsWith('.local.json'); }
+function excluded(name) { return EXCLUDED.has(name) || name.startsWith('.env.') || name.endsWith('.local.json') || /\.(pem|key|p12|pfx)$/i.test(name); }
 async function json(path) { return JSON.parse(await readFile(path, 'utf8')); }
 async function optional(path, defaultValue) {
   try { return await json(path); } catch (error) { if (error.code === 'ENOENT') return defaultValue; throw error; }
@@ -71,7 +72,7 @@ async function sourceId(source) {
   ensure(release.kind === 'vas-standalone-release' && release.runtimeExposure === 'loopback-development-only' && HASH_RE.test(release.releaseId), 'Source is not a loopback-only VAS release');
   return release.releaseId;
 }
-async function artifact(store, id) {
+async function artifact(store, id, trustedPublicPem) {
   ensure(HASH_RE.test(id), 'Invalid release identifier');
   const folder = join(store, 'artifacts', id);
   const manifest = await json(join(folder, 'artifact.json'));
@@ -79,6 +80,11 @@ async function artifact(store, id) {
   const actual = await digestDirectory(join(folder, 'source'));
   ensure(manifest.digest === actual.digest && manifest.fileCount === actual.fileCount, 'Artifact contents have changed since staging');
   ensure((await sourceId(join(folder, 'source'))) === id, 'Artifact release identity mismatch');
+  if (trustedPublicPem) {
+    const proof=await optional(join(folder,'signature.json'),null);
+    ensure(proof,'Unsigned release cannot be trusted');
+    verifyArtifactSignature(manifest,proof,trustedPublicPem);
+  }
   return manifest;
 }
 export async function stageRelease({ source, store, verifySource }) {
@@ -125,20 +131,24 @@ async function state(store, env) {
     && Array.isArray(current.history), 'Invalid environment state');
   return current;
 }
-export async function status({ store, environment }) {
-  const root = resolve(store);
-  const current = await state(root, environment);
-  if (current.active) await artifact(root, current.active);
-  return current;
+export async function status({store,environment,trustedPublicPem}) {
+  const root=resolve(store);
+  const current=await state(root,environment);
+  if(current.active) await artifact(root,current.active,trustedPublicPem);
+  const activation=await optional(join(root,'environments',environment,'activation.json'),null);
+  if(activation && trustedPublicPem && current.active===activation.releaseId && current.revision===activation.stateRevision)
+    await validateActivation({store:root,environment,trustedPublicPem,expectedRelease:activation.releaseId});
+  return {...current,activated:activation?.releaseId??null,pendingActivation:current.active!==(activation?.releaseId??null)};
 }
-async function transition({ store, environment, to, expect, profile, action }) {
+async function transition({ store, environment, to, expect, profile, action, trustedPublicPem }) {
   ensure(typeof expect === 'string' && (expect === 'none' || HASH_RE.test(expect)), 'Provide --expect none or current release ID');
   validateProfile(profile, environment);
+  ensure(typeof trustedPublicPem==='string' && trustedPublicPem.length>0,'Trusted publisher public key required');
   return locked(resolve(store), async () => {
     const root = resolve(store);
     const current = await state(root, environment);
     ensure((current.active ?? 'none') === expect, 'Stale deployment state: expected ' + expect + ', actual ' + (current.active ?? 'none'));
-    const candidate = await artifact(root, to);
+    const candidate = await artifact(root, to, trustedPublicPem);
     if (action === 'rollback') {
       ensure(current.active !== null, 'No active release to roll back');
       ensure(current.history.some(h => h.to === to), 'Rollback target has not previously been active');
@@ -156,3 +166,92 @@ async function transition({ store, environment, to, expect, profile, action }) {
 }
 export async function promoteRelease(args) { return transition({ ...args, action: 'promote' }); }
 export async function rollbackRelease(args) { return transition({ ...args, action: 'rollback' }); }
+
+/** Sign a staged artifact; the private key never enters the staging store. */
+export async function signRelease({store,releaseId,privatePem}) {
+  ensure(privatePem,'Publisher private key required');
+  const root=resolve(store);
+  return locked(root,async()=>{
+    const artifact=await artifact(root,releaseId);
+    const destination=join(root,'artifacts',releaseId,'signature.json');
+    const previous=await optional(destination,null);
+    const proof=signArtifact(artifact,privatePem);
+    if(previous) {
+      ensure(JSON.stringify(previous)===JSON.stringify(proof),'Release has already been signed; cannot replace publisher signature');
+      return proof;
+    }
+    await writeFile(destination,JSON.stringify(proof,null,2)+'\n',{flag:'wx',mode:0o600});
+    return proof;
+  });
+}
+
+/** Validate that the live disk pointer matches an authenticated, published release. */
+export async function validateActivation({store,environment,trustedPublicPem,expectedRelease}) {
+  ensure(trustedPublicPem,'Trusted publisher public key required');
+  ensure(ENVIRONMENTS.includes(environment),'Unsupported environment');
+  const root=resolve(store);
+  const activation=await json(join(root,'environments',environment,'activation.json'));
+  ensure(activation.version===1 && HASH_RE.test(activation.releaseId),'Invalid activated release');
+  if(expectedRelease) ensure(activation.releaseId===expectedRelease,'Activated release does not match expected release');
+  const state=await state(root,environment);
+  ensure(state.active===activation.releaseId && state.revision===activation.stateRevision,'Activation is stale; promote/rollback requires explicit reactivation');
+  const manifest=await artifact(root,activation.releaseId,trustedPublicPem);
+  ensure(activation.artifactDigest===manifest.digest,'Activation artifact digest mismatch');
+  const directory=join(root,'environments',environment);
+  const link=await readlink(join(directory,'current'));
+  ensure(link===join('deployments',activation.releaseId,'source'),'Runtime activation link points outside selected release');
+  const deployed=join(directory,'deployments',activation.releaseId,'source');
+  const actual=await digestDirectory(deployed);
+  ensure(actual.digest===manifest.digest,'Activated runtime files have changed');
+  return {releaseId:activation.releaseId,path:deployed,artifactDigest:manifest.digest,stateRevision:state.revision};
+}
+
+/** Materialize verified application files, prepare offline dependencies, atomically switch local runtime.
+ * Does not stop running processes, expose ports or change any database.
+ */
+export async function activateRelease({store,environment,to,profile,trustedPublicPem,prepareRuntime}) {
+  validateProfile(profile,environment);
+  ensure(trustedPublicPem,'Trusted publisher public key required');
+  ensure(typeof prepareRuntime==='function','A runtime preparation callback is required');
+  ensure(HASH_RE.test(to),'Invalid target release');
+  const root=resolve(store);
+  return locked(root,async()=>{
+    const state=await state(root,environment);
+    ensure(state.active===to,'Release must first be promoted in the chosen environment');
+    const manifest=await artifact(root,to,trustedPublicPem);
+    const envRoot=join(root,'environments',environment);
+    const deployment=join(envRoot,'deployments',to);
+    const target=join(deployment,'source');
+    const current=await optional(join(envRoot,'activation.json'),null);
+    if(current?.releaseId===to && current.stateRevision===state.revision) {
+      return {...await validateActivation({store:root,environment,trustedPublicPem,expectedRelease:to}),alreadyActivated:true};
+    }
+    await mkdir(join(envRoot,'deployments'),{recursive:true});
+    const existing=await stat(deployment).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;});
+    if(!existing){
+      const temporary=await mkdtemp(join(envRoot,'deployments','.prepare-'));
+      try {
+        await mkdir(join(temporary,'source'));
+        const staged=join(root,'artifacts',to,'source');
+        for(const file of (await digestDirectory(staged)).files){
+          const destination=join(temporary,'source',file.path);
+          await mkdir(dirname(destination),{recursive:true});
+          await cp(join(staged,file.path),destination,{errorOnExist:true,force:false});
+        }
+        ensure((await digestDirectory(join(temporary,'source'))).digest===manifest.digest,'Runtime source differs from signed artifact');
+        await prepareRuntime(join(temporary,'source'));
+        ensure((await digestDirectory(join(temporary,'source'))).digest===manifest.digest,'Runtime preparation modified release source');
+        await rename(temporary,deployment);
+      }finally{await rm(temporary,{recursive:true,force:true});}
+    } else {
+      ensure((await digestDirectory(target)).digest===manifest.digest,'Previously prepared runtime has changed');
+    }
+    const link=join(envRoot,`.current-${randomUUID()}`);
+    try{
+      await symlink(join('deployments',to,'source'),link,'dir');
+      await rename(link,join(envRoot,'current'));
+    }finally{await rm(link,{force:true});}
+    await atomic(join(envRoot,'activation.json'),{version:1,releaseId:to,artifactDigest:manifest.digest,stateRevision:state.revision,activatedAt:new Date().toISOString()});
+    return {...await validateActivation({store:root,environment,trustedPublicPem,expectedRelease:to}),alreadyActivated:false};
+  });
+}

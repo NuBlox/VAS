@@ -28,6 +28,9 @@ test('exports independent, verifiable SvelteKit application with runtime routes 
   assert.equal((await readJSON(join(dest,'deployment/profiles/local.json'))).bindHost,'127.0.0.1');
   const generatedPackage=await readJSON(join(dest,'package.json'));
   assert.ok(generatedPackage.scripts['deploy:stage']);
+  assert.ok(generatedPackage.scripts['deploy:activate']);
+  assert.ok(generatedPackage.scripts['deploy:keygen']);
+  assert.ok((await readFile(join(dest,'scripts/deploy/signing.mjs'),'utf8')).includes('Ed25519'));
   assert.equal(spawnSync(process.execPath,['scripts/verify-release.mjs'],{cwd:dest}).status,0);
   assert.equal(run(['--out',dest],dir).status,1,'must never overwrite existing export');
   const sql=await readFile(join(dest,'db/initial.mysql.sql'),'utf8');
