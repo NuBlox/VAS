@@ -10,6 +10,8 @@
   import { inspectWorkflowContext } from '#lib/studio/inspection.js';
   import { scaffoldModelCrud } from '#lib/studio/scaffold.js';
   import { preferredDisplayField, displayFields } from '#lib/studio/references.js';
+  import { scaffoldMasterDetail } from '#lib/studio/master-detail.js';
+  import { relatedRows, relationshipMetadata } from '#lib/studio/relations.js';
 
   const STORE='visual-application-studio-v1';
   const properties={
@@ -19,7 +21,7 @@
     textarea:['label','field','placeholder','required','bindingModelId','bindingFieldId'],
     select:['label','field','options','required','bindingModelId','bindingFieldId','referenceDisplayFieldId'],
     checkbox:['label','field','required','bindingModelId','bindingFieldId'],
-    button:['text','variant','action','targetPageId','bindingModelId'],table:['title','columns','bindingModelId']
+    button:['text','variant','action','targetPageId','bindingModelId','keepSelection'],table:['title','columns','bindingModelId','relationParentModelId','relationFieldId','detailPageId'], 'record-detail':['title','columns','bindingModelId']
   };
   const selectOptions={
     level:[['1','1'],['2','2'],['3','3'],['4','4']],tone:[['plain','Plain'],['muted','Muted']],
@@ -43,6 +45,7 @@
   let exposedInputName=$state('');
   let exposedInputProp=$state('');
   let exposedSlotName=$state('');
+  let masterDetailChoice=$state('');
   let debugBreakpoints=$state({});
   let debugInputs=$state({});
   let debugSelectedRecords=$state({});
@@ -56,6 +59,8 @@
   let runtimeState=$state({enabled:false,projectId:'',revision:'',reason:'Local database runtime not configured'});
   let runtimeMode=$state('memory'),liveRecords=$state({}),selectedRecords=$state({}),busy=$state(false);
   let referenceOptions=$state({}),referenceSearch=$state({}),referenceStatus=$state({});
+  let relatedRecords=$state({}),relatedPages=$state({}),relatedErrors=$state({}),detailRecords=$state({});
+  const relationRequests=new Map();
   const referenceRequests=new Map();
   let loginId=$state(''),loginPassword=$state(''),authBusy=$state(false),auditVisible=$state(false),auditEvents=$state([]);
   let runtimeReady=$derived(runtimeState.enabled&&runtimeState.authenticated&&runtimeState.projectId===project.id&&runtimeState.revision===projectRevision(project));
@@ -66,6 +71,7 @@
   let composedNodes=$derived(renderPageComponents(project,page,{fields,records:runtimeMode==='mysql'?liveRecords:records,selected:selectedRecords}));
   let activeModel=$derived(project.models.find(m=>m.id===activeModelId));
   let activeField=$derived(activeModel?.fields.find(f=>f.id===activeFieldId));
+  let masterDetailOptions=$derived(project.models.flatMap(child=>child.fields.filter(f=>f.referenceModelId===activeModelId).map(f=>({id:`${child.id}|${f.id}`,label:`${child.name} via ${f.name}`}))));
   let modelIds=$derived(new Map(project.models.map(m=>[m.id,m])));
   let activeWorkflow=$derived(project.workflows.find(w=>w.id===activeWorkflowId));
   let activeStep=$derived(activeWorkflow?.steps.find(s=>s.id===activeStepId));
@@ -382,7 +388,11 @@
           if(field)patch.field=field.name;
           if(c.type==='select')patch.referenceDisplayFieldId=preferredDisplayField(p.models.find(m=>m.id===field?.referenceModelId));
         }
-        if(c.type==='table'&&model)patch.columns=model.fields.filter(f=>!f.primary).map(f=>f.name).join(',');
+        if(['table','record-detail'].includes(c.type)&&model)patch.columns=model.fields.slice(0,6).map(f=>f.name).join(',');
+        if(c.type==='table'){patch.relationParentModelId='';patch.relationFieldId='';}
+      }
+      if(key==='relationParentModelId'){
+        patch.relationFieldId=p.models.find(m=>m.id===c.props.bindingModelId)?.fields.find(f=>f.referenceModelId===value)?.id??'';
       }
       if(key==='bindingFieldId'){
         const field=p.models.find(m=>m.id===c.props.bindingModelId)?.fields.find(f=>f.id===value);
@@ -456,14 +466,32 @@
       if(referenceRequests.get(component.id)===requestId) {referenceOptions={...referenceOptions,[component.id]:payload.options};referenceStatus={...referenceStatus,[component.id]:''};}
     }catch(error){if(referenceRequests.get(component.id)===requestId)referenceStatus={...referenceStatus,[component.id]:error.message};}
   }
+  async function fetchRelated(component,nextPage=0){
+    if(!runtimeReady||runtimeMode!=='mysql')return;
+    const parentId=selectedRecords[component.props.relationParentModelId];
+    const count=(relationRequests.get(component.id)??0)+1;relationRequests.set(component.id,count);
+    if(!parentId){relatedRecords={...relatedRecords,[component.id]:{records:[],page:0,hasMore:false}};relatedErrors={...relatedErrors,[component.id]:''};return;}
+    const pageId=page.id;
+    relatedRecords={...relatedRecords,[component.id]:{records:[],page:nextPage,hasMore:false}};
+    const query=new URLSearchParams({pageId,parentId,page:String(nextPage),limit:'20'});
+    try{
+      const response=await fetch('/api/runtime/relations/'+encodeURIComponent(component.id)+'?'+query,{headers:{'x-studio-project-id':project.id,'x-studio-project-revision':projectRevision(project)},cache:'no-store'});
+      const result=await response.json();if(!response.ok)throw Error(result.error??'Related records unavailable');
+      if(relationRequests.get(component.id)!==count)return;
+      relatedRecords={...relatedRecords,[component.id]:result};relatedPages={...relatedPages,[component.id]:nextPage};relatedErrors={...relatedErrors,[component.id]:''};
+    }catch(error){if(relationRequests.get(component.id)===count){relatedRecords={...relatedRecords,[component.id]:{records:[],page:0,hasMore:false}};relatedErrors={...relatedErrors,[component.id]:error.message};}}
+  }
+  function changeRelatedPage(component,n){void fetchRelated(component,n);}
+  async function refreshRelated(){const nodes=[];walkNodes(page.components,n=>{if(n.type==='table'&&n.props.relationParentModelId)nodes.push(n);});await Promise.all(nodes.map(n=>fetchRelated(n,relatedPages[n.id]??0)));}
   async function refreshLive(){
     if(!runtimeReady||runtimeMode!=='mysql')return;
-    const ids=new Set();walkNodes(page.components,c=>{if(c.type==='table'&&c.props.bindingModelId)ids.add(c.props.bindingModelId);});
+    const ids=new Set();walkNodes(page.components,c=>{if(c.type==='table'&&c.props.bindingModelId&&!c.props.relationParentModelId)ids.add(c.props.bindingModelId);});
     for(const id of ids){
       try{const result=await requestRecords(id);liveRecords={...liveRecords,[id]:result.records};}
       catch(e){notice=`MySQL read failed: ${e.message}`;}
     }
     walkNodes(page.components,c=>{if(c.type==='select'&&c.props.referenceDisplayFieldId)void loadReference(c,referenceSearch[c.id]??'');});
+    await refreshRelated();
   }
   async function enterPreview(){mode='preview';selectedId='';notice='';if(runtimeMode==='mysql')await refreshLive();}
   async function chooseRuntime(value){
@@ -476,10 +504,16 @@
     const f=project.models.find(m=>m.id===component.props.bindingModelId)?.fields.find(f=>f.id===component.props.bindingFieldId);
     return f?.type==='date'?'date':f?.type==='datetime'?'datetime-local':f?.type==='decimal'?'number':'text';
   }
-  function selectRecord(modelId,record){
+  function selectRecord(modelId,record,detailPageId=''){
     const model=project.models.find(m=>m.id===modelId),pk=model?.fields.find(f=>f.primary);
     if(!pk)return;
-    selectedRecords={...selectedRecords,[modelId]:String(record[pk.name])};
+    const chosen={...selectedRecords,[modelId]:String(record[pk.name])};
+    const details={...detailRecords,[modelId]:record};
+    for(const pg of project.pages)walkNodes(pg.components,n=>{
+      if(n.type==='table'&&n.props.relationParentModelId===modelId){delete chosen[n.props.bindingModelId];delete details[n.props.bindingModelId];}
+    });
+    selectedRecords=chosen;
+    detailRecords=details;
     const next={...fields};
     walkNodes(page.components,c=>{
       if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingModelId===modelId){
@@ -488,6 +522,8 @@
       }
     });
     fields=next;notice=`Selected ${model.name} record ${record[pk.name]}.`;
+    if(detailPageId){selectPage(detailPageId);mode='preview';}
+    else void refreshRelated();
   }
   async function activate(c,event='click'){
     const workflow=workflowForTrigger(project,page.id,c.id,event);
@@ -588,6 +624,11 @@
   function deleteModel(){if(!activeModel)return;safe(p=>{p.models=p.models.filter(m=>m.id!==activeModelId);});if(!notice){activeModelId=project.models[0]?.id??'';activeFieldId='';}}
   function addField(){if(!activeModel)return;const field=createField(`field_${activeModel.fields.length+1}`);safe(p=>p.models.find(m=>m.id===activeModelId).fields.push(field));if(!notice)activeFieldId=field.id;}
   function generateCrudScreens(){if(!activeModel)return;let screens;safe(p=>{screens=scaffoldModelCrud(p,activeModelId);});if(screens&&!notice){selectPage(screens.listPageId);notice='Generated editable list, create and edit screens with three workflows. Select a record on the list to update or delete it.';}}
+  function generateMasterDetail(){
+    const [childId,fieldId]=masterDetailChoice.split('|');if(!childId||!fieldId){notice='Choose a related child model first.';return;}
+    let result;safe(p=>{result=scaffoldMasterDetail(p,activeModelId,childId,fieldId);});
+    if(result&&!notice){selectPage(result.masterPageId);notice='Created master-detail pages. Select a parent record, view related child records and open a detail.';}
+  }
   function editField(key,value){safe(p=>{
     const f=p.models.find(m=>m.id===activeModelId).fields.find(f=>f.id===activeFieldId);
     f[key]=value;
@@ -658,13 +699,24 @@
         {:else}<select class="form-input" disabled={mode==='design'} value={fields[component.props.field]??''} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.value};if(mode==='preview')void activate(component,'change');}}><option value="">Select one…</option>{#each String(component.props.options??'').split('\n').filter(Boolean) as opt}<option value={opt}>{opt}</option>{/each}</select>{/if}
       {:else if component.type==='checkbox'}<label class="checkline"><input type="checkbox" disabled={mode==='design'} checked={Boolean(fields[component.props.field])} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.checked};if(mode==='preview')void activate(component,'change');}} />{component.props.label}</label>
       {:else if component.type==='button'}<button class:secondary={component.props.variant==='secondary'} class="render-button" onclick={e=>{e.stopPropagation();if(mode==='preview')activate(component);}} disabled={mode==='design'}>{component.props.text}</button>
+      {:else if component.type==='record-detail'}<div class="table-wrap"><h3>{component.props.title}</h3>
+        {#if detailRecords[component.props.bindingModelId] && selectedRecords[component.props.bindingModelId]}
+          <dl>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<dt>{col.trim()}</dt><dd>{String(detailRecords[component.props.bindingModelId][col.trim()]??'—')}</dd>{/each}</dl>
+        {:else}<p>Choose a related record to view its details.</p>{/if}
+      </div>
       {:else if component.type==='table'}<div class="table-wrap"><h3>{component.props.title}</h3><table><thead><tr>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<th>{col.trim()}</th>{/each}{#if mode==='preview'&&runtimeMode==='mysql'&&component.props.bindingModelId}<th>Record</th>{/if}</tr></thead><tbody>
         {#if mode==='preview'&&runtimeMode==='mysql'&&component.props.bindingModelId}
-          {#each (liveRecords[component.props.bindingModelId]??[]) as record,i}
-            <tr>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<td>{String(record[col.trim()]??'—')}</td>{/each}<td><button class="row-select" onclick={e=>{e.stopPropagation();selectRecord(component.props.bindingModelId,record);}}>Select</button></td></tr>
+          {#each (component.props.relationParentModelId?(relatedRecords[component.id]?.records??[]):(liveRecords[component.props.bindingModelId]??[])) as record,i}
+            <tr>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<td>{String(record[col.trim()]??'—')}</td>{/each}<td><button class="row-select" onclick={e=>{e.stopPropagation();selectRecord(component.props.bindingModelId,record,component.props.detailPageId??'');}}>Select</button></td></tr>
           {:else}<tr><td class="muted" colspan={String(component.props.columns??'').split(',').filter(Boolean).length+1}>No records yet. Use a bound Create button to add one.</td></tr>{/each}
         {:else}<tr>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<td class="muted">{(records[page.id]??[]).length?String((records[page.id]??[]).at(-1)?.[col.trim().toLowerCase().replaceAll(' ','_')]??'—'):'No data yet'}</td>{/each}</tr>{/if}
-      </tbody></table></div>{/if}
+      </tbody></table>
+        {#if component.props.relationParentModelId}
+          {#if relatedErrors[component.id]}<p role="status">{relatedErrors[component.id]}</p>{/if}
+          {#if !selectedRecords[component.props.relationParentModelId]}<p>Choose a parent record first.</p>{/if}
+          <div class="inspector-buttons"><button disabled={!relatedRecords[component.id]?.page} onclick={e=>{e.stopPropagation();changeRelatedPage(component,relatedRecords[component.id].page-1);}}>Previous</button><span>Page {(relatedRecords[component.id]?.page??0)+1}</span><button disabled={!relatedRecords[component.id]?.hasMore} onclick={e=>{e.stopPropagation();changeRelatedPage(component,relatedRecords[component.id].page+1);}}>Next</button></div>
+        {/if}
+      </div>{/if}
     </div>
   {/each}
   {#if mode==='design'}<div class="dropzone last" role="presentation" ondragover={e=>e.preventDefault()} ondrop={e=>onDrop(e,parentId,nodes.length)}>Drop a component here</div>{/if}
@@ -844,6 +896,9 @@
                       {:else}<p>No form inputs on the trigger page.</p>{/each}
                     </div>
                     <div><strong>Relationship selections</strong>
+                      {#each debugInspection.relatedLists as rel (rel.componentId)}
+                        <div><strong>Related {rel.childModelId}</strong><small>{rel.status} · parent ID {rel.parentId??'not selected'} · {rel.count} matching trial records ({rel.foreignKey})</small></div>
+                      {/each}
                       {#each debugInspection.references as ref (ref.componentId)}
                         <div class="binding-inspector-row"><button onclick={()=>goToBindingSource(ref.componentId)}>{ref.field}</button><span>{ref.status} · ID {ref.selectedId??"—"}</span><strong>{ref.label??ref.displayField}</strong></div>
                       {:else}<p>No relationship pickers on this page.</p>{/each}
@@ -899,6 +954,12 @@
               <label class="property-label">MySQL table<input value={activeModel.table} onchange={e=>updateModel('table',e.currentTarget.value)} /></label>
               <button class="model-add" onclick={addField}>+ Add attribute</button>
               <button class="model-add" onclick={generateCrudScreens}>Generate CRUD screens</button>
+              {#if masterDetailOptions.length}
+                <div class="section-label">MASTER–DETAIL GENERATOR</div>
+                <label class="property-label">Child relationship<select value={masterDetailChoice} onchange={e=>masterDetailChoice=e.currentTarget.value}><option value="">Choose relationship</option>{#each masterDetailOptions as option (option.id)}<option value={option.id}>{option.label}</option>{/each}</select></label>
+                <button class="model-add" onclick={generateMasterDetail}>Generate master-detail pages</button>
+                <p class="hint">Generates a parent picker, a permission-aware paginated child table, a selected child detail view and a back link.</p>
+              {/if}
               <p class="hint">Builds a record list, edit controls and a new-record form with create, update and delete workflows. Pages remain editable. Required fields are checked before saving; the database validates all field types.</p>
               <button class="danger page-delete" onclick={deleteModel}>Delete entity</button>
               <p class="hint">Names use lowercase ASCII letters, digits and underscores. One primary key is required per entity.</p>
@@ -1020,9 +1081,10 @@
           <div class="section-label">CONFIGURATION</div>
           {#each properties[selected.type] as key}
             <label class="property-label">{key==='targetPageId'?'Navigate to page':key==='bindingModelId'?'Bound entity':key==='bindingFieldId'?'Bound attribute':key.replaceAll(/([A-Z])/g,' $1')}
-              {#if key==='required'}<input type="checkbox" checked={Boolean(selected.props[key])} onchange={e=>updateProps(key,e.currentTarget.checked)} />
-              {:else if key==='targetPageId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Select destination…</option>{#each project.pages as p}<option value={p.id}>{p.name}</option>{/each}</select>
-              {:else if key==='bindingModelId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Unbound</option>{#each project.models as m}<option value={m.id}>{m.name}</option>{/each}</select>
+              {#if key==='required'||key==='keepSelection'}<input type="checkbox" checked={Boolean(selected.props[key])} onchange={e=>updateProps(key,e.currentTarget.checked)} />
+              {:else if key==='targetPageId'||key==='detailPageId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Select destination…</option>{#each project.pages as p}<option value={p.id}>{p.name}</option>{/each}</select>
+              {:else if key==='bindingModelId'||key==='relationParentModelId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Unbound</option>{#each project.models as m}<option value={m.id}>{m.name}</option>{/each}</select>
+              {:else if key==='relationFieldId'}<select value={String(selected.props.relationFieldId??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Choose a foreign key</option>{#each (modelIds.get(selected.props.bindingModelId)?.fields??[]).filter(f=>f.referenceModelId===selected.props.relationParentModelId) as f}<option value={f.id}>{f.name}</option>{/each}</select>
               {:else if key==='bindingFieldId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">No attribute</option>{#each (modelIds.get(selected.props.bindingModelId)?.fields??[]) as f}<option value={f.id}>{f.name} · {f.type}</option>{/each}</select>
               {:else if key==='referenceDisplayFieldId'}<select value={String(selected.props.referenceDisplayFieldId??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Static options</option>{#each displayFields(referenceFor(selected)) as f}<option value={f.id}>{f.name}</option>{/each}</select>
               {:else if selectOptions[key]}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,key==='level'?Number(e.currentTarget.value):e.currentTarget.value)}>{#each selectOptions[key] as [value,label]}<option value={value}>{label}</option>{/each}</select>

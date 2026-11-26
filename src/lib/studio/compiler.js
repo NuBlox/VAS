@@ -19,6 +19,7 @@ export function exportPageToSvelte(page) {
         case 'button':output.push(`${indent}<button type="button" class="${p.variant==='secondary'?'secondary':'primary'}">${E(p.text)}</button>`);break;
         case 'card':output.push(`${indent}<section class="card"><h3>${E(p.title)}</h3><p>${E(p.body)}</p></section>`);break;
         case 'divider':output.push(`${indent}<hr />`);break;
+        case 'record-detail':{const cols=String(p.columns??'').split(',').map(x=>x.trim()).filter(Boolean);output.push(`${indent}<section><h3>${E(p.title)}</h3><dl>${cols.map(x=>`<dt>${E(x)}</dt><dd>Selected value</dd>`).join('')}</dl></section>`);break;}
         case 'table':{const cols=String(p.columns??'').split(',').map(x=>x.trim()).filter(Boolean);output.push(`${indent}<section><h3>${E(p.title)}</h3><table><thead><tr>${cols.map(x=>`<th>${E(x)}</th>`).join('')}</tr></thead><tbody></tbody></table></section>`);break;}
         default:throw new Error(`Cannot export component: ${type}`);
       }

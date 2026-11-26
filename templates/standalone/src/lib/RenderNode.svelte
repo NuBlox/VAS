@@ -5,6 +5,10 @@
   export let records;
   export let selected;
   export let primaryNames;
+  export let detailRecords = {};
+  export let relatedRecords = {};
+  export let relatedErrors = {};
+  export let changeRelatedPage = () => {};
   export let busy = false;
   export let action;
   export let change;
@@ -22,7 +26,7 @@
   <section class:columns={node.type === 'columns'} class="container">
     {#if props.title}<h2>{props.title}</h2>{/if}
     {#each node.children ?? [] as child (child.id)}
-      <svelte:self node={child} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
+      <svelte:self node={child} {fields} {records} {selected} {primaryNames} {detailRecords} {relatedRecords} {relatedErrors} {changeRelatedPage} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
     {/each}
   </section>
 {:else if node.type === 'heading'}
@@ -59,17 +63,32 @@
   <label class="inline"><input type="checkbox" name={props.field} checked={Boolean(fields[props.field])} on:change={event => {change(props.field,event.currentTarget.checked);action(node,'change');}} /> {props.label}</label>
 {:else if node.type === 'button'}
   <button class:secondary={props.variant === 'secondary'} type="button" disabled={busy} on:click={() => action(node)}>{props.text}</button>
+{:else if node.type === 'record-detail'}
+  <section class="table-wrap"><h3>{props.title}</h3>
+    {#if detailRecords[props.bindingModelId] && selected[props.bindingModelId]}
+      <dl>{#each columns as col}<dt>{col}</dt><dd>{String(detailRecords[props.bindingModelId][col] ?? '—')}</dd>{/each}</dl>
+    {:else}<p>Choose a record from the related list to view its details.</p>{/if}
+  </section>
 {:else if node.type === 'table'}
   <section class="table-wrap"><h3>{props.title}</h3>
     {#if !props.bindingModelId}<p>Bind this table to a model to display records.</p>
     {:else}
       <table><thead><tr><th>Selection</th>{#each columns as col}<th>{col}</th>{/each}</tr></thead><tbody>
-        {#each records[props.bindingModelId] ?? [] as item, index}
-          <tr><td><input type="radio" name={'selected-' + props.bindingModelId} checked={String(selected[props.bindingModelId] ?? '') === String(item[primaryNames[props.bindingModelId]])} aria-label={'Select row ' + (index + 1)} on:change={() => choose(props.bindingModelId, item)} /></td>
+        {#each (props.relationParentModelId ? (relatedRecords[node.id]?.records ?? []) : (records[props.bindingModelId] ?? [])) as item, index}
+          <tr><td><input type="radio" name={'selected-' + props.bindingModelId} checked={String(selected[props.bindingModelId] ?? '') === String(item[primaryNames[props.bindingModelId]])} aria-label={'Select row ' + (index + 1)} on:change={() => choose(props.bindingModelId, item, props.detailPageId ?? '')} /></td>
             {#each columns as col}<td>{String(item[col] ?? '')}</td>{/each}
           </tr>
         {:else}<tr><td colspan={columns.length + 1}>No records loaded</td></tr>{/each}
       </tbody></table>
+      {#if props.relationParentModelId}
+        {#if relatedErrors[node.id]}<p role="status">{relatedErrors[node.id]}</p>{/if}
+        {#if !selected[props.relationParentModelId]}<p>Select a parent record to view related records.</p>{/if}
+        <nav aria-label="Related records pages">
+          <button type="button" class="secondary" disabled={busy || !relatedRecords[node.id]?.page} on:click={() => changeRelatedPage(node,relatedRecords[node.id].page-1)}>Previous</button>
+          <span>Page {(relatedRecords[node.id]?.page ?? 0)+1}</span>
+          <button type="button" class="secondary" disabled={busy || !relatedRecords[node.id]?.hasMore} on:click={() => changeRelatedPage(node,relatedRecords[node.id].page+1)}>Next</button>
+        </nav>
+      {/if}
     {/if}
   </section>
 {/if}
@@ -83,6 +102,6 @@
   button{justify-self:start;border:0;border-radius:8px;padding:.7rem 1.15rem;background:#2563eb;color:white;font-weight:650;cursor:pointer}
   button.secondary{background:#e2e8f0;color:#2d3f5f}button:disabled{opacity:.55;cursor:wait}
   .card{border:1px solid #d7e1ee;border-radius:10px;padding:1rem} .card h3{margin-top:0}
-  .table-wrap{min-width:0;overflow-x:auto}.table-wrap table{width:100%;border-collapse:collapse}.table-wrap th,.table-wrap td{padding:.7rem;border-bottom:1px solid #e1e6f0;text-align:left}
+  dl{display:grid;grid-template-columns:minmax(110px,1fr) 2fr;gap:.5rem}dt{font-weight:600}dd{margin:0}dl{display:grid;grid-template-columns:minmax(110px,1fr) 2fr;gap:.5rem}dt{font-weight:600}dd{margin:0}.table-wrap{min-width:0;overflow-x:auto}.table-wrap table{width:100%;border-collapse:collapse}.table-wrap th,.table-wrap td{padding:.7rem;border-bottom:1px solid #e1e6f0;text-align:left}
   @media(max-width:640px){.columns{grid-template-columns:1fr}.columns>h2{grid-column:auto}}
 </style>

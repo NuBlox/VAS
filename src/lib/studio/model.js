@@ -1,10 +1,11 @@
 /** Safe, portable, metadata-first project definitions. Older projects migrate without data loss. */
 import { createStep, validateWorkflows } from './workflow.js';
 import { pickerMetadata } from './references.js';
+import { relationshipMetadata, detailMetadata, columnNames } from './relations.js';
 export const SCHEMA_VERSION = 3;
 export const FIELD_TYPES = ['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime'];
 export const CONTAINER_TYPES = ['section', 'columns'];
-export const COMPONENT_TYPES = ['heading','text','input','textarea','select','checkbox','button','card','divider','table',...CONTAINER_TYPES];
+export const COMPONENT_TYPES = ['heading','text','input','textarea','select','checkbox','button','card','divider','table','record-detail',...CONTAINER_TYPES];
 export const CATALOG = [
   {type:'section',label:'Section',group:'Layout',icon:'▤'},
   {type:'columns',label:'Two columns',group:'Layout',icon:'▥'},
@@ -17,7 +18,8 @@ export const CATALOG = [
   {type:'select',label:'Dropdown',group:'Form controls',icon:'▾'},
   {type:'checkbox',label:'Checkbox',group:'Form controls',icon:'☑'},
   {type:'button',label:'Button',group:'Actions',icon:'▰'},
-  {type:'table',label:'Data table',group:'Data display',icon:'▦'}
+  {type:'table',label:'Data table',group:'Data display',icon:'▦'},
+  {type:'record-detail',label:'Selected record',group:'Data display',icon:'▧'}
 ];
 export function createId(prefix='node') {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
@@ -30,9 +32,10 @@ export function createComponent(type,id=createId('component')) {
     textarea:{label:'Your notes',field:'notes',placeholder:'Enter your notes',required:false,bindingModelId:'',bindingFieldId:''},
     select:{label:'Choose an option',field:'choice',options:'First option\nSecond option\nThird option',required:false,bindingModelId:'',bindingFieldId:'',referenceDisplayFieldId:''},
     checkbox:{label:'I agree',field:'agreed',required:false,bindingModelId:'',bindingFieldId:''},
-    button:{text:'Submit',variant:'primary',action:'submit',targetPageId:'',bindingModelId:''},
+    button:{text:'Submit',variant:'primary',action:'submit',targetPageId:'',bindingModelId:'',keepSelection:false},
     card:{title:'Card title',body:'A useful card with supporting content.'},divider:{},
-    table:{title:'Recent records',columns:'name,email',bindingModelId:''},
+    table:{title:'Recent records',columns:'name,email',bindingModelId:'',relationParentModelId:'',relationFieldId:'',detailPageId:''},
+    'record-detail':{title:'Record details',columns:'name',bindingModelId:''},
     section:{title:'Section',tone:'plain'},columns:{title:'Columns',tone:'plain'}
   };
   if (!Object.hasOwn(defaults,type)) throw new Error(`Unknown component: ${type}`);
@@ -492,6 +495,13 @@ export function validateProject(project) {
           const model=modelLookup.get(c.props.bindingModelId);
           if(!model||(['input','textarea','select','checkbox'].includes(c.type)&&!model.fields.some(f=>f.id===c.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingFieldId))throw new Error('Broken field binding');
         }
+        if(c.type==='table'){
+          if(c.props.bindingModelId)columnNames(modelLookup.get(c.props.bindingModelId),c.props.columns);
+          if(c.props.relationParentModelId)relationshipMetadata(project,c);
+          else if(c.props.relationFieldId)throw new Error('Related table is missing a parent model');
+          if(c.props.detailPageId && !project.pages.some(p=>p.id===c.props.detailPageId))throw new Error('Related table has an invalid detail page');
+        }
+        if(c.type==='record-detail')detailMetadata(project,c);
         if(c.props.referenceDisplayFieldId !== undefined && typeof c.props.referenceDisplayFieldId !== 'string')throw new Error('Invalid reference display field');
         if(c.props.referenceDisplayFieldId && !pickerMetadata(project,c))throw new Error('Invalid reference picker');
         if(c.props.referenceDisplayFieldId && c.type !== 'select')throw new Error('Only dropdowns can be reference pickers');
@@ -521,6 +531,13 @@ export function validateProject(project) {
           const model=modelLookup.get(node.props.bindingModelId);
           if(!model||(['input','textarea','select','checkbox'].includes(node.type)&&!model.fields.some(f=>f.id===node.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(node.type)&&node.props.bindingFieldId))throw new Error('Broken reusable component binding');
         }
+        if(node.type==='table'){
+          if(node.props.bindingModelId)columnNames(modelLookup.get(node.props.bindingModelId),node.props.columns);
+          if(node.props.relationParentModelId)relationshipMetadata(project,node);
+          else if(node.props.relationFieldId)throw new Error('Related reusable table is missing a parent');
+          if(node.props.detailPageId && !project.pages.some(p=>p.id===node.props.detailPageId))throw new Error('Related reusable table has an invalid detail page');
+        }
+        if(node.type==='record-detail')detailMetadata(project,node);
         if(node.props.referenceDisplayFieldId !== undefined && typeof node.props.referenceDisplayFieldId !== 'string')throw new Error('Invalid reusable reference display field');
         if(node.props.referenceDisplayFieldId && !pickerMetadata(project,node))throw new Error('Invalid reusable reference picker');
         if(node.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(node.props.action))throw new Error('Invalid reusable button action');

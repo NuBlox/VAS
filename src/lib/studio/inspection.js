@@ -3,6 +3,7 @@
 import { walkNodes, resolveLinkedInputBinding } from './model.js';
 import { conditionResult, EVENT_VALUE_FIELD } from './workflow.js';
 import { pickerMetadata } from './references.js';
+import {relationshipMetadata,relatedRows} from './relations.js';
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -90,8 +91,18 @@ export function inspectWorkflowContext(project,flow,{fields={},selectedRecords={
     references.push(entry);
     if(status==='not-in-snapshot')diagnostics.push({severity:'warning',componentId:node.id,message:`Reference ${node.props.field} is not present in the trial record snapshot`});
   });
+  const relatedLists=[];
+  walkNodes(page.components,node=>{
+    if(node.type!=='table'||!node.props.relationParentModelId)return;
+    const config=relationshipMetadata(project,node);
+    const parentId=selectedRecords[config.parent.id]??null;
+    const visible=relatedRows(config,records[config.child.id],parentId);
+    const status=!parentId?'no-parent':!Array.isArray(records[config.child.id])?'no-snapshot':'filtered';
+    relatedLists.push({componentId:node.id,parentModelId:config.parent.id,childModelId:config.child.id,
+      parentId,foreignKey:config.field.name,status,count:visible.length,recordIds:visible.map(item=>String(item[config.child.fields.find(f=>f.primary).name]))});
+  });
   const bindings=inspectPageBindings(project,page,{fields,selected:selectedRecords,records});
-  return {pageId:page.id,eventContext:eventContext?copy(eventContext):null,formFields,references,
+  return {pageId:page.id,eventContext:eventContext?copy(eventContext):null,formFields,references,relatedLists,
     selectedRecords:copy(selectedRecords),conditions,bindings:bindings.rows,
     diagnostics:[...diagnostics,...bindings.diagnostics]};
 }
