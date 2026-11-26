@@ -1,5 +1,6 @@
 /** Safe, portable, metadata-first project definitions. Older projects migrate without data loss. */
 import { createStep, validateWorkflows } from './workflow.js';
+import { pickerMetadata } from './references.js';
 export const SCHEMA_VERSION = 3;
 export const FIELD_TYPES = ['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime'];
 export const CONTAINER_TYPES = ['section', 'columns'];
@@ -27,7 +28,7 @@ export function createComponent(type,id=createId('component')) {
     heading:{text:'New heading',level:2},text:{text:'Write some supporting text here.'},
     input:{label:'Text field',field:'text_field',placeholder:'Enter a value',required:false,bindingModelId:'',bindingFieldId:''},
     textarea:{label:'Your notes',field:'notes',placeholder:'Enter your notes',required:false,bindingModelId:'',bindingFieldId:''},
-    select:{label:'Choose an option',field:'choice',options:'First option\nSecond option\nThird option',required:false,bindingModelId:'',bindingFieldId:''},
+    select:{label:'Choose an option',field:'choice',options:'First option\nSecond option\nThird option',required:false,bindingModelId:'',bindingFieldId:'',referenceDisplayFieldId:''},
     checkbox:{label:'I agree',field:'agreed',required:false,bindingModelId:'',bindingFieldId:''},
     button:{text:'Submit',variant:'primary',action:'submit',targetPageId:'',bindingModelId:''},
     card:{title:'Card title',body:'A useful card with supporting content.'},divider:{},
@@ -491,6 +492,9 @@ export function validateProject(project) {
           const model=modelLookup.get(c.props.bindingModelId);
           if(!model||(['input','textarea','select','checkbox'].includes(c.type)&&!model.fields.some(f=>f.id===c.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(c.type)&&c.props.bindingFieldId))throw new Error('Broken field binding');
         }
+        if(c.props.referenceDisplayFieldId !== undefined && typeof c.props.referenceDisplayFieldId !== 'string')throw new Error('Invalid reference display field');
+        if(c.props.referenceDisplayFieldId && !pickerMetadata(project,c))throw new Error('Invalid reference picker');
+        if(c.props.referenceDisplayFieldId && c.type !== 'select')throw new Error('Only dropdowns can be reference pickers');
         if(c.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(c.props.action))throw new Error('Invalid button action');
       }
     };check(page.components,0);
@@ -517,6 +521,8 @@ export function validateProject(project) {
           const model=modelLookup.get(node.props.bindingModelId);
           if(!model||(['input','textarea','select','checkbox'].includes(node.type)&&!model.fields.some(f=>f.id===node.props.bindingFieldId))||(!['input','textarea','select','checkbox'].includes(node.type)&&node.props.bindingFieldId))throw new Error('Broken reusable component binding');
         }
+        if(node.props.referenceDisplayFieldId !== undefined && typeof node.props.referenceDisplayFieldId !== 'string')throw new Error('Invalid reusable reference display field');
+        if(node.props.referenceDisplayFieldId && !pickerMetadata(project,node))throw new Error('Invalid reusable reference picker');
         if(node.type==='button'&&!['submit','create','update','delete','navigate','reset','message'].includes(node.props.action))throw new Error('Invalid reusable button action');
       }
       checkTemplateNode(template.node,0);

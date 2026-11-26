@@ -3,6 +3,7 @@ import { RecordError, sqlFor, normaliseId } from '../../studio/records.js';
 import { getRecord } from './store.js';
 import { requireRole } from './auth.js';
 import { assertModelPermission } from './policy.js';
+import { assertReferencedValues } from './references.js';
 const actions = new Set(['model.create','model.update','model.delete','workflow.execute']);
 const outcomes = new Set(['committed','rejected']);
 export async function writeAudit(connection,{actor,action,resourceType,resourceId,outcome,projectId}) {
@@ -44,6 +45,7 @@ export async function executeAuditedMutation({db,project,model,operation,payload
     const {sql,params}=sqlFor(model,operation,payload??{},id);
     connection=await db.getConnection();
     await connection.beginTransaction();started=true;
+    if(operation!=='delete')await assertReferencedValues(connection,project,model,payload??{},actor,policy);
     const [result]=await connection.execute(sql,params);
     if(operation!=='create' && !result.affectedRows)throw new RecordError('Record not found',404);
     let record;

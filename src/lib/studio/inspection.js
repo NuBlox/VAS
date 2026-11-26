@@ -2,6 +2,7 @@
  * No database reads, writes, network requests or executable expressions. */
 import { walkNodes, resolveLinkedInputBinding } from './model.js';
 import { conditionResult, EVENT_VALUE_FIELD } from './workflow.js';
+import { pickerMetadata } from './references.js';
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -76,8 +77,21 @@ export function inspectWorkflowContext(project,flow,{fields={},selectedRecords={
     if(step.type==='condition'&&step.field===EVENT_VALUE_FIELD&&eventContext===null)
       diagnostics.push({severity:'warning',stepId:step.id,componentId:flow.trigger.componentId,message:'Current event value is unavailable until the debug session starts'});
   }
+  const references=[];
+  walkNodes(page.components,node=>{
+    if(node.type!=='select'||!node.props.referenceDisplayFieldId)return;
+    const config=pickerMetadata(project,node);
+    const id=fields[node.props.field];
+    const recordsAvailable=Array.isArray(records[config.target.id]);
+    const row=records[config.target.id]?.find(item=>String(item[config.primary.name])===String(id));
+    const status=id===undefined||id===null||id===''?'unset':row?'resolved':recordsAvailable?'not-in-snapshot':'unverified';
+    const entry={componentId:node.id,field:node.props.field,targetModelId:config.target.id,displayField:config.display.name,
+      selectedId:id??null,label:row?.[config.display.name]??null,status};
+    references.push(entry);
+    if(status==='not-in-snapshot')diagnostics.push({severity:'warning',componentId:node.id,message:`Reference ${node.props.field} is not present in the trial record snapshot`});
+  });
   const bindings=inspectPageBindings(project,page,{fields,selected:selectedRecords,records});
-  return {pageId:page.id,eventContext:eventContext?copy(eventContext):null,formFields,
+  return {pageId:page.id,eventContext:eventContext?copy(eventContext):null,formFields,references,
     selectedRecords:copy(selectedRecords),conditions,bindings:bindings.rows,
     diagnostics:[...diagnostics,...bindings.diagnostics]};
 }

@@ -5,6 +5,7 @@
  */
 import { createComponent, createId, validateProject } from './model.js';
 import { createStep } from './workflow.js';
+import { preferredDisplayField } from './references.js';
 
 const controlTypes = new Set(['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime']);
 const titleCase = value => String(value).replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -17,8 +18,9 @@ function component(type, props = {}) {
 function editableField(model, field, project) {
   if (!controlTypes.has(field.type)) throw new Error(`Unsupported field type: ${field.type}`);
   const reference = project.models.find(item => item.id === field.referenceModelId);
-  const label = reference ? `${titleCase(field.name)} (${reference.name} ID)` : titleCase(field.name);
-  const type = field.type === 'boolean' ? 'checkbox' : field.type === 'text' ? 'textarea' : 'input';
+  const displayFieldId = reference ? preferredDisplayField(reference) : '';
+  const label = reference ? reference.name : titleCase(field.name);
+  const type = displayFieldId ? 'select' : field.type === 'boolean' ? 'checkbox' : field.type === 'text' ? 'textarea' : 'input';
   const placeholder = field.referenceModelId ? 'Enter referenced record ID'
     : field.type === 'date' ? 'YYYY-MM-DD'
     : field.type === 'datetime' ? 'YYYY-MM-DD HH:MM:SS'
@@ -27,7 +29,8 @@ function editableField(model, field, project) {
   return component(type, {
     label, field: field.name, required: field.required,
     bindingModelId: model.id, bindingFieldId: field.id,
-    ...(type !== 'checkbox' ? { placeholder } : {})
+    ...(displayFieldId ? { referenceDisplayFieldId: displayFieldId, options: '' } : {}),
+    ...(type !== 'checkbox' && type !== 'select' ? { placeholder } : {})
   });
 }
 function workflow(page, button, model, operation, fields) {

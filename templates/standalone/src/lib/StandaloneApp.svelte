@@ -13,6 +13,10 @@
   let fields = {};
   let selected = {};
   let records = {};
+  let referenceOptions = {};
+  let referenceQueries = {};
+  let referenceErrors = {};
+  const activeLookupRequests = new Map();
   let runtime = null;
   let username = '';
   let password = '';
@@ -30,6 +34,7 @@
     notice = '';
     pendingWorkflow = null;
     if (push && typeof window !== 'undefined') window.history.pushState({}, '', page.path);
+    if(runtime?.authenticated)void refreshReferences();
   }
   function change(field, value) { fields = { ...fields, [field]: value }; }
   function choose(modelId, item) {
@@ -68,7 +73,22 @@
       catch (error) { notice = error.message; updated[modelId] = []; }
     }
     records = updated;
+    await refreshReferences();
   }
+  async function refreshReferences(){
+    const nodes=[];walkNodes(currentPage.components,node=>{if(node.type==='select'&&node.props.referenceDisplayFieldId)nodes.push(node);});
+    await Promise.all(nodes.map(node=>searchReference(node,referenceQueries[node.id]??'')));
+  }
+  async function searchReference(node,query=''){
+    if(!runtime?.authenticated)return;
+    const number=(activeLookupRequests.get(node.id)??0)+1;activeLookupRequests.set(node.id,number);
+    try {
+      const params=new URLSearchParams({pageId:currentPage.id,q:query});
+      const result=await request('/references/'+encodeURIComponent(node.id)+'?'+params);
+      if(activeLookupRequests.get(node.id)===number){referenceOptions={...referenceOptions,[node.id]:result.options};referenceErrors={...referenceErrors,[node.id]:''};}
+    } catch(error){if(activeLookupRequests.get(node.id)===number)referenceErrors={...referenceErrors,[node.id]:error.message};}
+  }
+  function changeReferenceQuery(node,query){referenceQueries={...referenceQueries,[node.id]:query};void searchReference(node,query);}
   async function login() {
     busy = true; notice = '';
     try {
@@ -80,7 +100,7 @@
   }
   async function logout() {
     busy = true;
-    try { await request('/auth/logout', { method:'POST' }); runtime = null; records = {}; selected = {}; fields = {}; pendingWorkflow = null; await refreshStatus(); }
+    try { await request('/auth/logout', { method:'POST' }); runtime = null; records = {}; selected = {}; fields = {}; referenceOptions = {}; pendingWorkflow = null; await refreshStatus(); }
     catch(error){notice=error.message;}finally{busy=false;}
   }
   function boundValues(modelId) {
@@ -181,7 +201,7 @@
     {#if runtime && !runtime.enabled}<p class="warning">Database runtime unavailable. This generated application remains usable for navigation and layout preview, but persistent records require configured localhost MySQL and a local account.</p>{/if}
     <div class="canvas">
       {#each renderPageComponents(project,currentPage,{fields,records,selected}) as node (node.id)}
-        <RenderNode {node} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} />
+        <RenderNode {node} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
       {/each}
     </div>
   </main></div>
