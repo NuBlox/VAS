@@ -8,6 +8,7 @@
   import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, workflowForTrigger, triggerEventsForType, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow, createActionDefinition, EVENT_VALUE_FIELD, eventContextForTrigger } from '#lib/studio/workflow.js';
   import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug, rewindWorkflowDebug, replayWorkflowDebug } from '#lib/studio/debugger.js';
   import { inspectWorkflowContext } from '#lib/studio/inspection.js';
+  import { scaffoldModelCrud } from '#lib/studio/scaffold.js';
 
   const STORE='visual-application-studio-v1';
   const properties={
@@ -563,6 +564,7 @@
   function updateModel(key,value){safe(p=>{const m=p.models.find(m=>m.id===activeModelId);m[key]=value;});}
   function deleteModel(){if(!activeModel)return;safe(p=>{p.models=p.models.filter(m=>m.id!==activeModelId);});if(!notice){activeModelId=project.models[0]?.id??'';activeFieldId='';}}
   function addField(){if(!activeModel)return;const field=createField(`field_${activeModel.fields.length+1}`);safe(p=>p.models.find(m=>m.id===activeModelId).fields.push(field));if(!notice)activeFieldId=field.id;}
+  function generateCrudScreens(){if(!activeModel)return;let screens;safe(p=>{screens=scaffoldModelCrud(p,activeModelId);});if(screens&&!notice){selectPage(screens.listPageId);notice='Generated editable list, create and edit screens with three workflows. Select a record on the list to update or delete it.';}}
   function editField(key,value){safe(p=>{
     const f=p.models.find(m=>m.id===activeModelId).fields.find(f=>f.id===activeFieldId);
     f[key]=value;
@@ -864,6 +866,8 @@
               <label class="property-label">Display name<input value={activeModel.name} onchange={e=>updateModel('name',e.currentTarget.value)} /></label>
               <label class="property-label">MySQL table<input value={activeModel.table} onchange={e=>updateModel('table',e.currentTarget.value)} /></label>
               <button class="model-add" onclick={addField}>+ Add attribute</button>
+              <button class="model-add" onclick={generateCrudScreens}>Generate CRUD screens</button>
+              <p class="hint">Builds a record list, edit controls and a new-record form with create, update and delete workflows. Pages remain editable. Required fields are checked before saving; the database validates all field types.</p>
               <button class="danger page-delete" onclick={deleteModel}>Delete entity</button>
               <p class="hint">Names use lowercase ASCII letters, digits and underscores. One primary key is required per entity.</p>
             {/if}
