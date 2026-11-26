@@ -1,3 +1,28 @@
+# Visual Application Studio · v1.7 — Visual CRUD Screen Generation
+
+VAS 1.7 adds **Generate CRUD screens** to the entity inspector in **Data models**. Choose an entity and press the button to generate two fully editable pages: a record list with inline edit controls, plus a new-record form. VAS also creates three declarative workflows (create, update, delete), bound to the model and their respective buttons. You can inspect or modify every generated component and workflow in the normal visual designer. Generated pages use safe route suffixes when generation is repeated; existing pages are never overwritten.
+
+The form maps existing model attributes to input/textarea/checkbox controls and preserves binding metadata. Required non-boolean fields receive a client-independent workflow check; **all values are still validated by the existing server model validation and MySQL constraints**. Foreign-key fields use an ID input, not yet a relationship-aware lookup; dates and numbers use text inputs, with server validation on save. On the record-list page, select a row to populate the same-page edit form before updating or deleting. Delete requires the existing admin role and confirmation. All database functions remain loopback-only and require a configured local MySQL runtime.
+
+To exercise generation, export and validation without changing your existing project:
+
+```bash
+npm install
+npm test
+npm run scaffold:generate -- /tmp/vas-scaffold.project.json
+npm run app:export -- --project /tmp/vas-scaffold.project.json --out /tmp/vas-scaffold-app
+cd /tmp/vas-scaffold-app
+npm install
+npm run verify:release
+npm test
+npm run check
+npm run build
+```
+
+**Scope:** This is metadata-driven CRUD scaffolding, not a new data migration tool or public hosting feature. Generation does not create or alter database tables, nor does it produce a dropdown for foreign keys. Review SQL schema changes before applying them to your local development database. No migration of the existing VAS project format is required.
+
+---
+
 # Visual Application Studio · v1.6 — Customer and Order End-to-End Acceptance
 
 VAS v1.6 adds a **repeatable no-code acceptance scenario** built using the same project-model authoring APIs as the visual designer. The scenario includes two navigable pages (Customers and Orders), model relationships, linked reusable customer form/list components, typed properties and slots, create/update/delete workflows, a shared action, read-only deterministic debugging and a standalone SvelteKit export. The exporter never patches generated Svelte code. The sample is synthetic; do not use real customer information.

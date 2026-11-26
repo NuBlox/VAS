@@ -97,3 +97,13 @@ jobs:
           npm run deploy:promote -- --store "$RUNNER_TEMP/customer-order-release-store" --env local --release "$RELEASE_ID" --expect none --profile deployment/profiles/local.json --trusted-key "$RUNNER_TEMP/customer-order-signer/public.pem"
           npm run deploy:activate -- --store "$RUNNER_TEMP/customer-order-release-store" --env local --release "$RELEASE_ID" --profile deployment/profiles/local.json --trusted-key "$RUNNER_TEMP/customer-order-signer/public.pem"
           npm run deploy:status -- --store "$RUNNER_TEMP/customer-order-release-store" --env local --trusted-key "$RUNNER_TEMP/customer-order-signer/public.pem"
+      - name: Generate, export and compile entity CRUD screens without editing source
+        run: |
+          npm run scaffold:generate -- "$RUNNER_TEMP/vas-scaffold.project.json"
+          npm run app:export -- --project "$RUNNER_TEMP/vas-scaffold.project.json" --out "$RUNNER_TEMP/vas-scaffold-application"
+          cd "$RUNNER_TEMP/vas-scaffold-application"
+          npm install
+          npm run verify:release
+          npm test
+          npm run check
+          npm run build
