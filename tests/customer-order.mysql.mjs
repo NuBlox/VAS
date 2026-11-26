@@ -122,7 +122,7 @@ test('standalone Customer/Order CRUD, FK, audit, roles, idempotency and rollback
 
     await assert.rejects(generated.executePublishedWorkflow({project,workflowId:orderFlow,
       payload:invocation(project,orderFlow,{...orderFields,customer_id:'999999999999'}),
-      actor:editor,db:pool,requestKey:randomUUID()}),e=>e?.code==='ER_NO_REFERENCED_ROW_2');
+      actor:editor,db:pool,requestKey:randomUUID()}),{status:409});
     assert.equal((await generatedStore.listRecords(pool,order)).length,1);
 
     // A second insert of the same unique email in the SAME transaction fails.
