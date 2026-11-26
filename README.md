@@ -1,3 +1,48 @@
+# Visual Application Studio · v1.6 — Customer and Order End-to-End Acceptance
+
+VAS v1.6 adds a **repeatable no-code acceptance scenario** built using the same project-model authoring APIs as the visual designer. The scenario includes two navigable pages (Customers and Orders), model relationships, linked reusable customer form/list components, typed properties and slots, create/update/delete workflows, a shared action, read-only deterministic debugging and a standalone SvelteKit export. The exporter never patches generated Svelte code. The sample is synthetic; do not use real customer information.
+
+## Generate and validate the application (Mac, Node >=22.17)
+
+From the VAS repository:
+
+```bash
+npm install
+npm test
+npm run check
+npm run build
+npm run acceptance:generate -- "$HOME/Developer/customer-orders.project.json"
+npm run app:export -- --project "$HOME/Developer/customer-orders.project.json" --out "$HOME/Developer/CustomerOrders-v16"
+cd "$HOME/Developer/CustomerOrders-v16"
+npm install
+npm run verify:release
+npm test
+npm run check
+npm run build
+npm run dev -- --host 127.0.0.1 --open
+```
+
+The generator refuses to overwrite an existing project JSON, and the exporter refuses to overwrite an export directory. Choose fresh destinations for repeated runs. The sample uses newly generated component IDs, so a new export may receive a different release ID; export/verify of the **same project JSON** is integrity-stable.
+
+The app has a Customers page for registering and editing customers, plus an Orders page with order entry, update, deletion (administrator-only), customer lookup and the same reusable customer form. The order form currently takes an explicit Customer ID obtained from the customer table; a visual relational picker is a future feature. Workflow decisions are explained by the existing visual debugger, and all data operations use the published, server-validated graph.
+
+## Disposable MySQL acceptance test
+
+CI runs `npm run test:acceptance:mysql` separately after the standard suite, against its **disposable MySQL 8** service. It loads the exported application's workflow and store runtime directly and checks:
+
+- Customer and order creation, selection-based editing and deletion; enforced Customer → Order foreign key.
+- Typed event validation and reusable action behaviour in unit/debugger tests.
+- Editor/viewer/admin permission boundaries and explicit deletion confirmation.
+- Duplicate request idempotency and conflict rejection.
+- Transaction rollback for duplicate inserts or invalid references, with durable audit outcomes and no committed failed-request ledger entry.
+- Standalone export integrity and CI compilation, including signed local staging/activation.
+
+The MySQL test **drops** only the synthetic `vas_acceptance_customers` and `vas_acceptance_orders` tables in the specified disposable database. It refuses to run unless `MYSQL_INTEGRATION=1`, `DB_HOST=127.0.0.1`, `DB_NAME=visual_studio_dev` and either GitHub Actions is active or `VAS_ACCEPTANCE_DISPOSABLE=yes` is explicitly set. **Never run it against a database containing valuable data.** No database installation or migration is performed by the generator or exporter.
+
+**Not production-ready:** public hosting remains blocked, the identity/session model is local-development-only, there is no managed deployment, no automatic schema migration or relational picker, and CI is a synthetic technical acceptance test rather than an independent usability study of the designer.
+
+---
+
 # Visual Application Studio · v1.5 — Binding Inspector & Deterministic Debugging
 
 VAS v1.5 improves the **visual authoring and troubleshooting experience** while preserving the schema-v3 project format and the localhost-only runtime boundary. No database migration is required. Both the VAS editor and exported SvelteKit apps use one pure resolver for typed component-property bindings.

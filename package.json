@@ -1,7 +1,7 @@
 {
   "name": "visual-application-studio",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -12,7 +12,9 @@
     "runtime:publish": "node scripts/publish-project.mjs",
     "auth:user": "node scripts/local-user.mjs",
     "preview:generate": "node scripts/build-workflow-preview.mjs",
-    "app:export": "node scripts/export-application.mjs"
+    "app:export": "node scripts/export-application.mjs",
+    "acceptance:generate": "node scripts/generate-customer-order-acceptance.mjs",
+    "test:acceptance:mysql": "node --test tests/customer-order.mysql.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^9.0.0",
