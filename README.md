@@ -1,3 +1,38 @@
+# Visual Application Studio · v1.5 — Binding Inspector & Deterministic Debugging
+
+VAS v1.5 improves the **visual authoring and troubleshooting experience** while preserving the schema-v3 project format and the localhost-only runtime boundary. No database migration is required. Both the VAS editor and exported SvelteKit apps use one pure resolver for typed component-property bindings.
+
+## Inspect and debug a workflow
+
+1. Open **Workflows**, select an event-triggered workflow, then enter trial values in **Step-through debugger**. Checkbox sources now retain their boolean type.
+2. Select **Start / Reset**, **Step**, **Continue / Break** or **Run to end**. Each executed step records a separate immutable-in-use snapshot and an explanation of its condition, proposed action and next step.
+3. Select **Step back** or click a trace entry to restore the simulated form, record selection, effects and execution pointer after that step. **Verify replay** reruns the trace from the saved initial inputs and refuses to silently accept changed logic.
+4. In **Binding inspector**, inspect the event payload, trial form values, selected records, condition previews and every linked reusable input. Select a source to open that component in the page designer, or jump to a condition step from the inspector.
+5. Missing, unselected or incorrectly typed bound values appear as diagnostics. The inspector explains the static fallback used by the renderer. No values are persisted into publication metadata.
+
+**Safety:** Dry-run execution and binding inspection never call MySQL, remote APIs or user-authored scripts. Data create/update/delete steps produce simulated effects. The inspector may show already-loaded in-memory record snapshots, but it never queries the database itself.
+
+### Verify locally
+
+```bash
+npm install
+npm test
+npm run check
+npm run build
+node scripts/generate-composition-fixture.mjs /tmp/vas-v15-compose.json
+npm run app:export -- --project /tmp/vas-v15-compose.json --out /tmp/vas-v15-generated
+cd /tmp/vas-v15-generated
+npm install
+npm run verify:release
+npm test
+npm run check
+npm run build
+```
+
+The export destination must not already exist. The generated application uses the same typed binding resolver as the designer; no migration or automatic deployment is performed.
+
+---
+
 # Visual Application Studio · v1.4 — Composable Linked Components
 
 VAS v1.4 adds **typed public inputs**, **instance-specific data bindings** and **named content slots** to the linked component system introduced in v1.2. Existing schema-v3 projects and previously published releases remain compatible. No MySQL schema migration is necessary.

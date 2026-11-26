@@ -6,7 +6,8 @@
   import { projectRevision } from '#lib/studio/revision.js';
   import { validateRecord } from '#lib/studio/records.js';
   import { STEP_TYPES, OPERATORS, createStep, createWorkflow, workflowForButton, workflowForTrigger, triggerEventsForType, insertWorkflowStep, removeWorkflowStep, workflowDiagram, executeWorkflow, createActionDefinition, EVENT_VALUE_FIELD, eventContextForTrigger } from '#lib/studio/workflow.js';
-  import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug } from '#lib/studio/debugger.js';
+  import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug, rewindWorkflowDebug, replayWorkflowDebug } from '#lib/studio/debugger.js';
+  import { inspectWorkflowContext } from '#lib/studio/inspection.js';
 
   const STORE='visual-application-studio-v1';
   const properties={
@@ -70,6 +71,20 @@
   let flowTriggerNode=$derived((()=>{let node=null;if(flowSourcePage)walkNodes(flowSourcePage.components,c=>{if(c.id===activeWorkflow?.trigger.componentId)node=c;});return node;})());
   let flowHasEventValue=$derived(Boolean(flowTriggerNode&&flowTriggerNode.type!=='button'));
   let flowFields=$derived((()=>{const result=[];if(flowSourcePage)walkNodes(flowSourcePage.components,c=>{if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.field&&!result.includes(c.props.field))result.push(c.props.field);});return result;})());
+  let flowFieldTypes=$derived((()=>{const types=new Map();if(flowSourcePage)walkNodes(flowSourcePage.components,c=>{
+    if(['input','textarea','select','checkbox'].includes(c.type)&&c.props.field)types.set(c.props.field,c.type==='checkbox'?'boolean':'string');
+  });return types;})());
+  let debugRequiredModels=$derived((()=>{const ids=new Set();
+    if(activeWorkflow)for(const step of activeWorkflow.steps)if(step.type==='condition'&&step.operator==='selected')ids.add(step.modelId);
+    if(flowSourcePage)walkNodes(flowSourcePage.components,c=>{for(const binding of Object.values(c.inputBindings??{}))if(binding.source==='record')ids.add(binding.modelId);});
+    return project.models.filter(m=>ids.has(m.id));
+  })());
+  let debugInspection=$derived(activeWorkflow?inspectWorkflowContext(project,activeWorkflow,{
+    fields:debugSession?.fields??debugInputs,
+    selectedRecords:debugSession?.selectedRecords??debugSelectedRecords,
+    eventContext:debugSession?.eventContext??null,
+    records:runtimeMode==='mysql'?liveRecords:records
+  }):null);
   let allTriggers=$derived((()=>{const result=[];for(const pg of project.pages)walkNodes(pg.components,c=>{for(const event of triggerEventsForType(c.type))result.push({id:c.id,pageId:pg.id,event,label:`${pg.name} / ${c.props.text??c.props.label} / ${event}`});});return result;})());
 
   onMount(()=>{void (async()=>{
@@ -258,6 +273,24 @@
     if(!activeWorkflow||!debugSession)return;
     try{const next=continueWorkflowDebug(activeWorkflow,debugSession);debugSession=next;activeStepId=next.paused?next.currentStepId:next.trace.at(-1)?.stepId??activeStepId;notice='';}
     catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function rewindDebugTo(stepCount){
+    if(!activeWorkflow||!debugSession)return;
+    try{const next=rewindWorkflowDebug(activeWorkflow,debugSession,stepCount);
+      debugSession=next;activeStepId=next.currentStepId||next.trace.at(-1)?.stepId||activeWorkflow.startStepId;notice='';
+    }catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function replayDebug(){
+    if(!activeWorkflow||!debugSession)return;
+    try{const next=replayWorkflowDebug(activeWorkflow,debugSession);
+      debugSession=next;activeStepId=next.currentStepId||next.trace.at(-1)?.stepId||activeWorkflow.startStepId;
+      notice='Replay verified: the same trial inputs followed the same workflow steps and effects.';
+    }catch(e){notice=`Debugger: ${e.message}`;}
+  }
+  function goToBindingSource(componentId){
+    if(!activeWorkflow||!componentId)return;
+    tab='pages';mode='design';activeId=activeWorkflow.trigger.pageId;selectedId=componentId;
+    notice='Showing the source component for this binding.';
   }
   function insertLinked(id,parentId='',index){
     let inserted;safe(p=>{inserted=insertLinkedTemplate(p,id,activeId,parentId,index);});
@@ -748,24 +781,61 @@
                 <div class="debugger-heading"><div><strong>Step-through debugger</strong><p>Dry run only. Database writes, navigation, messages and form changes are simulated; nothing is sent to MySQL.</p></div><span>NO SIDE EFFECTS</span></div>
                 <div class="debugger-inputs">
                   {#each flowFields as field (field)}
-                    <label>{field}<input aria-label={`Debug ${field}`} value={debugInputs[field]??''} oninput={e=>{debugInputs={...debugInputs,[field]:e.currentTarget.value};debugSession=null;}} placeholder="Test value" /></label>
+                    {#if flowFieldTypes.get(field)==='boolean'}
+                      <label class="debugger-selection"><input type="checkbox" aria-label={`Debug ${field}`} checked={Boolean(debugInputs[field])} onchange={e=>{debugInputs={...debugInputs,[field]:e.currentTarget.checked};debugSession=null;}} />{field}</label>
+                    {:else}
+                      <label>{field}<input aria-label={`Debug ${field}`} value={debugInputs[field]??''} oninput={e=>{debugInputs={...debugInputs,[field]:e.currentTarget.value};debugSession=null;}} placeholder="Test value" /></label>
+                    {/if}
                   {/each}
-                  {#each project.models.filter(model=>activeWorkflow.steps.some(step=>step.type==='condition'&&step.operator==='selected'&&step.modelId===model.id)) as model (model.id)}
-                    <label class="debugger-selection"><input type="checkbox" checked={Boolean(debugSelectedRecords[model.id])} onchange={e=>{debugSelectedRecords={...debugSelectedRecords,[model.id]:e.currentTarget.checked?'example_record':''};debugSession=null;}} />{model.name} selected</label>
+                  {#each debugRequiredModels as model (model.id)}
+                    <label>{model.name} selected record ID<input aria-label={`Debug selected ${model.name}`} value={debugSelectedRecords[model.id]??''} oninput={e=>{debugSelectedRecords={...debugSelectedRecords,[model.id]:e.currentTarget.value};debugSession=null;}} placeholder="Primary key" /></label>
                   {/each}
                 </div>
-                <div class="debugger-buttons"><button onclick={beginDebugSession}>Start / Reset</button><button onclick={stepDebug} disabled={!debugSession||debugSession.finished}>Step</button><button onclick={continueDebug} disabled={!debugSession||debugSession.finished}>Continue / Break</button><button onclick={finishDebug} disabled={!debugSession||debugSession.finished}>Run to end</button>
+                <div class="debugger-buttons"><button onclick={beginDebugSession}>Start / Reset</button><button onclick={stepDebug} disabled={!debugSession||debugSession.finished}>Step</button><button onclick={continueDebug} disabled={!debugSession||debugSession.finished}>Continue / Break</button><button onclick={finishDebug} disabled={!debugSession||debugSession.finished}>Run to end</button><button onclick={()=>rewindDebugTo(Math.max(0,debugSession.trace.length-1))} disabled={!debugSession||debugSession.trace.length===0}>Step back</button><button onclick={replayDebug} disabled={!debugSession||debugSession.trace.length===0}>Verify replay</button>
                   {#if debugSession}<span aria-live="polite">{debugSession.finished?'Complete':debugSession.paused?`Paused before: ${debugSession.currentStepId}`:`Next: ${debugSession.currentStepId}`} · {debugSession.trace.length} executed</span>{/if}
                 </div>
                 {#if debugSession}
                   <div class="debugger-results">
                     <div><strong>Execution trace</strong>
-                      <ol>{#each debugSession.trace as item,i (i)}<li><code>{item.stepId}</code> · {item.type}{item.outcome?` · ${item.outcome.toUpperCase()}`:''}</li>{:else}<li>Ready to step from the starting node</li>{/each}</ol>
+                      <ol>{#each debugSession.trace as item,i (i)}<li><button class="debugger-trace-link" onclick={()=>rewindDebugTo(i+1)} title="Restore trial state after this step"><code>{item.stepId}</code> · {item.type}{item.outcome?` · ${item.outcome.toUpperCase()}`:''}</button><small>{item.explanation}</small><small>{item.type==='condition'?`Observed: ${JSON.stringify(item.actual)} · Expected: ${JSON.stringify(item.expected)}`:''}</small></li>{:else}<li>Ready to step from the starting node</li>{/each}</ol>
                     </div>
                     <div><strong>Simulated effects</strong><pre>{JSON.stringify(debugSession.effects,null,2)}</pre><strong>Trial form state</strong><pre>{JSON.stringify(debugSession.fields,null,2)}</pre></div>
                   </div>
                 {/if}
               </div>
+              {#if debugInspection}
+                <section class="binding-inspector" aria-label="Visual binding inspector">
+                  <header><strong>Binding inspector</strong><p>Read-only trial values and source references. A missing or incompatible binding uses the static component value; no data source is queried.</p></header>
+                  <div class="binding-inspector-grid">
+                    <div><strong>Event context</strong><pre>{JSON.stringify(debugInspection.eventContext,null,2)??'Start a debug session to inspect the trigger event.'}</pre></div>
+                    <div><strong>Selected records</strong><pre>{JSON.stringify(debugInspection.selectedRecords,null,2)}</pre></div>
+                    <div><strong>Form fields</strong>
+                      {#each debugInspection.formFields as field (field.componentId)}
+                        <div class="binding-inspector-row"><button onclick={()=>goToBindingSource(field.componentId)}>{field.field}</button><code>{field.expectedType}</code><span>{field.status} · {JSON.stringify(field.value)}</span></div>
+                      {:else}<p>No form inputs on the trigger page.</p>{/each}
+                    </div>
+                    <div><strong>Condition preview</strong>
+                      {#each debugInspection.conditions as item (item.stepId)}
+                        <div class="binding-inspector-row"><button onclick={()=>activeStepId=item.stepId}>{item.stepId}</button><span>{item.source} · {item.operator}</span><strong>{item.result?'TRUE':'FALSE'}</strong></div>
+                      {:else}<p>No condition steps in this workflow.</p>{/each}
+                    </div>
+                  </div>
+                  <div><strong>Reusable component bindings</strong>
+                    {#each debugInspection.bindings as item (`${item.instanceId}:${item.inputName}`)}
+                      <div class="binding-inspector-row"><button onclick={()=>goToBindingSource(item.componentId)}>{item.inputName}</button><span>{item.sourceLabel} → {item.property} ({item.expectedType})</span><code>{item.status}</code><span>{JSON.stringify(item.value)}</span></div>
+                    {:else}<p>No exposed component properties on this page.</p>{/each}
+                  </div>
+                  {#if debugInspection.diagnostics.length}
+                    <div class="binding-diagnostics"><strong>Diagnostics</strong>
+                      {#each debugInspection.diagnostics as issue,i (i)}
+                        <div class="binding-inspector-row"><span class:error-text={issue.severity==='error'}>{issue.severity.toUpperCase()} · {issue.message}</span>
+                          {#if issue.componentId}<button onclick={()=>goToBindingSource(issue.componentId)}>Locate component</button>{:else if issue.stepId}<button onclick={()=>activeStepId=issue.stepId}>Locate step</button>{/if}
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                </section>
+              {/if}
               <div class="workflow-instructions"><strong>How it works</strong><span>Choose an action in the toolbar, click <b>Add step</b>, then select a card to change its targets and settings. Cyclic or broken paths are rejected automatically.</span></div>
             {:else}
               <div class="empty-state">No workflows yet. Create a button in the page designer, then click <b>+ Workflow</b> to connect visual logic to it.</div>
