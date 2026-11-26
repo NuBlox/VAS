@@ -339,6 +339,34 @@ export function clearLinkedSlot(project,pageId,nodeId,name){
   if(!linked)throw new Error('Select linked component for slot');
   if(linked.root.slotFills)delete linked.root.slotFills[name];
 }
+/** Resolve one typed instance input without changing published metadata.
+ * Kept in the model layer so the inspector and both Svelte renderers agree exactly. */
+export function resolveLinkedInputBinding(project,root,input,context={}){
+  const binding=root?.inputBindings?.[input?.name];
+  if(!binding)return {status:'unbound',reason:'No dynamic binding is configured'};
+  let value;
+  if(binding.source==='form'){
+    if(!Object.hasOwn(context.fields??{},binding.field))return {status:'missing',reason:`Form field ${binding.field} has no current value`};
+    value=context.fields[binding.field];
+  }else if(binding.source==='record'){
+    const selected=context.selected?.[binding.modelId];
+    if(selected===undefined||selected===null||selected==='')return {status:'missing',reason:'No record is selected'};
+    const model=project.models.find(m=>m.id===binding.modelId);
+    const field=model?.fields.find(f=>f.id===binding.fieldId);
+    const pk=model?.fields.find(f=>f.primary)?.name;
+    const rows=context.records?.[binding.modelId];
+    if(!field||!pk||!Array.isArray(rows))return {status:'missing',reason:'Selected model data is unavailable'};
+    const selectedKey=plain(selected)?selected[pk]:selected;
+    if(selectedKey===null||selectedKey===undefined)return {status:'missing',reason:'Selected record has no primary key'};
+    const match=rows.find(row=>plain(row)&&String(row[pk])===String(selectedKey));
+    if(!match)return {status:'missing',reason:'Selected record is not present in the current data snapshot'};
+    if(!Object.hasOwn(match,field.name))return {status:'missing',reason:`Selected record has no value for ${field.name}`};
+    value=match[field.name];
+  }else return {status:'invalid',reason:'Unsupported binding source'};
+  if(typeof value!==input.type||!supportedValue(value))
+    return {status:'type-mismatch',reason:`Expected ${input.type}, received ${value===null?'null':typeof value}`};
+  return {status:'resolved',value};
+}
 /** Pure renderer: never persist live form/record data into published metadata. */
 export function renderPageComponents(project,page,context={}){
   const result=cloneProject(page.components);
@@ -352,20 +380,10 @@ export function renderPageComponents(project,page,context={}){
       if(target)target.children=cloneProject(root.slotFills[slot.name]);
     }
     for(const input of template.inputs??[]){
-      const binding=root.inputBindings?.[input.name];if(!binding)continue;
-      let value;
-      if(binding.source==='form')value=context.fields?.[binding.field];
-      else if(binding.source==='record'){
-        const model=project.models.find(m=>m.id===binding.modelId),field=model?.fields.find(f=>f.id===binding.fieldId);
-        const pk=model?.fields.find(f=>f.primary)?.name;
-        const match=(context.records?.[model.id]??[]).find(record=>{
-          const selected=context.selected?.[model.id];return String(record[pk])===String(plain(selected)?selected[pk]:selected);
-        });
-        value=field&&match?.[field.name];
-      }
-      if(typeof value!==input.type||!supportedValue(value))continue;
+      const resolved=resolveLinkedInputBinding(project,root,input,context);
+      if(resolved.status!=='resolved')continue;
       let node;walkNodes([root],item=>{if(item.sourceTemplateNodeId===input.nodeId)node=item;});
-      if(node)node.props[input.prop]=value;
+      if(node)node.props[input.prop]=resolved.value;
     }
   }
   return result;
