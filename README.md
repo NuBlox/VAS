@@ -1,3 +1,15 @@
+# Visual Application Studio · v1.8 — Searchable Relationship Pickers
+
+VAS v1.8 adds declarative reference dropdowns for existing model foreign keys. Scaffolded Customer/Order forms now show a searchable customer picker, display customer names and submit canonical IDs. A picker is a normal `select` control with `referenceDisplayFieldId`; it must be bound to a published model field with a validated foreign-key relationship. The reference target and display column cannot be specified by the browser.
+
+The read-only `/api/runtime/references/[componentId]?pageId=...&q=...` route requires the existing localhost runtime, authenticated actor, matching release revision, and read permission on the related model. It returns at most **20** `{id,label}` results and uses SQL identifier allowlists and escaped, parameterised LIKE search. Both direct CRUD and workflow transactions check referenced IDs and related-model read permission inside the write transaction; a missing or forbidden reference cannot create an Order.
+
+**Try it:** generate Customer/Order data screens, publish the project locally, log in, switch Preview to MySQL, and open New Order. Search for a customer by name and choose a result; the bound `customer_id` field receives its canonical key. The same control works in an exported standalone app. Offline design preview intentionally does not query MySQL.
+
+**Scope:** localhost development only; do not use real customer data. Existing v1.7 projects work unchanged, and v1.8 requires no schema migration. Foreign-key dropdowns require a referenced model containing a string/text display column; other reference fields keep ordinary ID entry until a display property is designed.
+
+---
+
 # Visual Application Studio · v1.7 — Visual CRUD Screen Generation
 
 VAS 1.7 adds **Generate CRUD screens** to the entity inspector in **Data models**. Choose an entity and press the button to generate two fully editable pages: a record list with inline edit controls, plus a new-record form. VAS also creates three declarative workflows (create, update, delete), bound to the model and their respective buttons. You can inspect or modify every generated component and workflow in the normal visual designer. Generated pages use safe route suffixes when generation is repeated; existing pages are never overwritten.

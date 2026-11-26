@@ -44,6 +44,7 @@ test('standalone Customer/Order CRUD, FK, audit, roles, idempotency and rollback
   assert.equal(run.status,0,run.stderr);
   const generated=await import(pathToFileURL(join(out,'src/lib/server/runtime/workflow-execution.js')).href);
   const generatedStore=await import(pathToFileURL(join(out,'src/lib/server/runtime/store.js')).href);
+  const generatedReferences=await import(pathToFileURL(join(out,'src/lib/server/runtime/references.js')).href);
   const {createPool}=await import('mysql2/promise');
   const pool=createPool({host:process.env.DB_HOST??'127.0.0.1',port:Number(process.env.DB_PORT??3306),
     user:process.env.DB_USER??'root',password:process.env.DB_PASSWORD??'',database:process.env.DB_NAME??'visual_studio_dev',
@@ -79,6 +80,12 @@ test('standalone Customer/Order CRUD, FK, audit, roles, idempotency and rollback
     assert.equal(customers.length,1);
     assert.equal(customers[0].name,customerFields.name);
 
+    const pickerResults=await generatedReferences.searchReferences(pool,project,project.pages[1].id,'acceptance_order_customer','Ada',editor,null);
+    assert.deepEqual(pickerResults,[{id:String(customerId),label:'Ada Lovelace'}]);
+    await assert.rejects(generatedReferences.searchReferences(pool,project,project.pages[1].id,'acceptance_order_customer','Ada',viewer,
+      {models:{[customer.id]:{read:['editor','admin']}}}),{status:403});
+    await assert.rejects(generatedReferences.searchReferences(pool,project,project.pages[1].id,'acceptance_order_name','Ada',editor,null),{status:404});
+
     await assert.rejects(generated.executePublishedWorkflow({project,workflowId:customerFlow,
       payload:customerPayload,actor:viewer,db:pool,requestKey:randomUUID()}),{status:403});
     const rejectedInput=await generated.executePublishedWorkflow({project,workflowId:customerFlow,
@@ -87,6 +94,12 @@ test('standalone Customer/Order CRUD, FK, audit, roles, idempotency and rollback
     assert.ok(!rejectedInput.effects.some(x=>x.type==='data'));
 
     const orderFlow='workflow_acceptance_order_create';
+    await assert.rejects(generated.executePublishedWorkflow({project,workflowId:orderFlow,
+      payload:invocation(project,orderFlow,{order_name:'Orphan',customer_id:'999999999',amount:'10'}),
+      actor:editor,db:pool,requestKey:randomUUID()}),{status:409});
+    await assert.rejects(generated.executePublishedWorkflow({project,workflowId:orderFlow,
+      payload:invocation(project,orderFlow,{order_name:'Forbidden',customer_id:String(customerId),amount:'10'}),
+      actor:editor,db:pool,requestKey:randomUUID(),policy:{models:{[customer.id]:{read:['admin']}}}}),{status:403});
     const orderFields={order_name:'Initial fit-out',customer_id:customerId,amount:'42.50'};
     const orderPayload=invocation(project,orderFlow,orderFields);
     const orderSaved=await generated.executePublishedWorkflow({project,workflowId:orderFlow,

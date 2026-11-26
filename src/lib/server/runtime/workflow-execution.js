@@ -13,6 +13,7 @@ import { canExecuteWorkflow } from './auth.js';
 import { writeAudit } from './audit.js';
 import { reserveWorkflowRequest, completeWorkflowRequest } from './idempotency.js';
 import { assertWorkflowPermission } from './policy.js';
+import { assertReferencedValues } from './references.js';
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const FORM_TYPES = new Set(['input', 'textarea', 'checkbox', 'select']);
@@ -90,7 +91,7 @@ function boundPayload(project, modelId, bindings, context, operation) {
     if (raw !== undefined && raw !== '') Object.defineProperty(values, field.name, { value: raw, enumerable: true });
   }
   // sqlFor performs required-field, type, column and identifier validation.
-  return { model, statement: sqlFor(model, operation, values, operation === 'update' ? context.selectedRecords[modelId] : undefined) };
+  return { model, values, statement: sqlFor(model, operation, values, operation === 'update' ? context.selectedRecords[modelId] : undefined) };
 }
 
 async function insertWithinTransaction(connection, model, statement) {
@@ -128,7 +129,8 @@ export async function executePublishedWorkflow({ project, workflowId, payload, d
     const trace = await executeWorkflow(flow, context, {
       data: async (operation, modelId) => {
         if (operation === 'create') {
-          const { model, statement } = boundPayload(project, modelId, bindings, context, 'create');
+          const { model, values, statement } = boundPayload(project, modelId, bindings, context, 'create');
+          await assertReferencedValues(connection,project,model,values,actor,policy);
           const record = await insertWithinTransaction(connection, model, statement);
           context.selectedRecords[modelId] = String(record[model.fields.find(f => f.primary).name]);
           effects.push({ type:'data', operation, modelId, id:context.selectedRecords[modelId] });
@@ -139,7 +141,8 @@ export async function executePublishedWorkflow({ project, workflowId, payload, d
         const id = context.selectedRecords[modelId];
         if (!id) throw new RecordError('Select a record before updating or deleting it');
         if (operation === 'update') {
-          const { statement } = boundPayload(project, modelId, bindings, context, 'update');
+          const { statement, values } = boundPayload(project, modelId, bindings, context, 'update');
+          await assertReferencedValues(connection,project,model,values,actor,policy);
           // Validate and apply the same parameterised statement on this connection.
           const [result] = await connection.execute(statement.sql, statement.params);
           if (!result.affectedRows) throw new RecordError('Record not found', 404);

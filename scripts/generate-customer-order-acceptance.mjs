@@ -11,6 +11,7 @@ import {
   appendLinkedSlotNode, updateLinkedSlotNode, validateProject, walkNodes
 } from '../src/lib/studio/model.js';
 import { createStep, createActionDefinition } from '../src/lib/studio/workflow.js';
+import { preferredDisplayField } from '../src/lib/studio/references.js';
 
 export function createAcceptanceProject() {
   const project = createProject();
@@ -34,6 +35,12 @@ export function createAcceptanceProject() {
     if (!definition) throw Error(`Unknown field ${fieldName}`);
     return control('input',id,{label,field,required:definition.required,
       bindingModelId:model.id,bindingFieldId:definition.id});
+  }
+  function reference(id,label,field,model,fieldName) {
+    const definition=model.fields.find(item=>item.name===fieldName);
+    const target=project.models.find(item=>item.id===definition.referenceModelId);
+    return control('select',id,{label,field,options:'',required:definition.required,
+      bindingModelId:model.id,bindingFieldId:definition.id,referenceDisplayFieldId:preferredDisplayField(target)});
   }
   function button(id, text, model, action='submit') {
     return control('button',id,{text,action,bindingModelId:model.id});
@@ -71,14 +78,14 @@ export function createAcceptanceProject() {
   const orderPanel=insertLinkedTemplate(project,template.id,orders.id);
   setLinkedInput(project,orders.id,orderPanel.id,'panel_title','Customer lookup and registration');
   setLinkedInput(project,orders.id,orderPanel.id,'name_label','Customer full name');
-  setLinkedInput(project,orders.id,orderPanel.id,'current_name','Use the customer table to find an ID.');
+  setLinkedInput(project,orders.id,orderPanel.id,'current_name','Choose a customer from the searchable relationship picker below.');
   const orderHelp=appendLinkedSlotNode(project,orders.id,orderPanel.id,'instructions','card');
   updateLinkedSlotNode(project,orders.id,orderPanel.id,'instructions',orderHelp.id,
-    {title:'Reference a customer',body:'Select a customer in the table and enter its ID in the order customer ID field.'});
+    {title:'Reference a customer',body:'Search customer names, then select a record to link to this order.'});
   orders.components.unshift(control('heading','acceptance_orders_heading',{text:'Orders',level:1}));
   orders.components.push(section('acceptance_order_section','Order editor',[
     input('acceptance_order_name','Order name','order_name',orderModel,'name'),
-    input('acceptance_order_customer','Customer ID','customer_id',orderModel,'customer_id'),
+    reference('acceptance_order_customer','Customer','customer_id',orderModel,'customer_id'),
     input('acceptance_order_amount','Amount','amount',orderModel,'amount'),
     button('acceptance_order_save','Create order',orderModel),
     button('acceptance_order_edit','Update selected order',orderModel),
@@ -125,7 +132,7 @@ export function createAcceptanceProject() {
       createStep('condition','order_validate_amount',{field:'amount',operator:'filled',trueId:'order_create',falseId:'order_missing_amount'}),
       createStep('create','order_create',{modelId:orderModel.id,nextId:'order_notify'}),
       createStep('invoke_action','order_notify',{actionId:notification.id,actionVersion:'1',inputSource:'field',inputField:'order_name',nextId:''}),
-      createStep('message','order_missing_customer',{text:'Customer ID is required.',nextId:''}),
+      createStep('message','order_missing_customer',{text:'Select a customer before saving the order.',nextId:''}),
       createStep('message','order_missing_name',{text:'Order name is required.',nextId:''}),
       createStep('message','order_missing_amount',{text:'Order amount is required.',nextId:''})
     ]

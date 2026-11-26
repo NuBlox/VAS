@@ -9,6 +9,10 @@
   export let action;
   export let change;
   export let choose;
+  export let referenceOptions = {};
+  export let referenceQueries = {};
+  export let referenceErrors = {};
+  export let changeReferenceQuery = () => {}; 
   const props = node.props;
   const columns = String(props.columns ?? '').split(',').map(c => c.trim()).filter(Boolean);
   const heading = [1, 2, 3, 4].includes(Number(props.level)) ? `h${props.level}` : 'h2';
@@ -18,7 +22,7 @@
   <section class:columns={node.type === 'columns'} class="container">
     {#if props.title}<h2>{props.title}</h2>{/if}
     {#each node.children ?? [] as child (child.id)}
-      <svelte:self node={child} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} />
+      <svelte:self node={child} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
     {/each}
   </section>
 {:else if node.type === 'heading'}
@@ -33,6 +37,13 @@
   <label><span>{props.label}</span>
     {#if node.type === 'textarea'}
       <textarea name={props.field} placeholder={props.placeholder ?? ''} required={props.required ?? false} value={fields[props.field] ?? ''} on:input={event => change(props.field, event.currentTarget.value)} on:change={event => {change(props.field,event.currentTarget.value);action(node,'change');}} on:blur={() => action(node,'blur')}></textarea>
+    {:else if node.type === 'select' && props.referenceDisplayFieldId}
+      <input type="search" maxlength="80" aria-label={'Search ' + props.label} placeholder="Search records…" value={referenceQueries[node.id] ?? ''} on:input={event => changeReferenceQuery(node,event.currentTarget.value)} />
+      <select name={props.field} required={props.required ?? false} aria-label={props.label} value={fields[props.field] ?? ''} on:change={event => {change(props.field,event.currentTarget.value);action(node,'change');}}><option value="">Choose a record…</option>
+        {#each referenceOptions[node.id] ?? [] as option (option.id)}<option value={option.id}>{option.label}</option>{/each}
+        {#if fields[props.field] && !(referenceOptions[node.id]??[]).some(option=>option.id===String(fields[props.field]))}<option value={String(fields[props.field])}>Selected record #{fields[props.field]}</option>{/if}
+      </select>
+      {#if referenceErrors[node.id]}<small role="status">{referenceErrors[node.id]}</small>{/if}
     {:else if node.type === 'select'}
       <select name={props.field} required={props.required ?? false} value={fields[props.field] ?? ''} on:change={event => {change(props.field,event.currentTarget.value);action(node,'change');}}>
         <option value="">Choose…</option>

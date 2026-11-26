@@ -9,6 +9,7 @@
   import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug, rewindWorkflowDebug, replayWorkflowDebug } from '#lib/studio/debugger.js';
   import { inspectWorkflowContext } from '#lib/studio/inspection.js';
   import { scaffoldModelCrud } from '#lib/studio/scaffold.js';
+  import { preferredDisplayField, displayFields } from '#lib/studio/references.js';
 
   const STORE='visual-application-studio-v1';
   const properties={
@@ -16,7 +17,7 @@
     heading:['text','level'],text:['text'],card:['title','body'],divider:[],
     input:['label','field','placeholder','required','bindingModelId','bindingFieldId'],
     textarea:['label','field','placeholder','required','bindingModelId','bindingFieldId'],
-    select:['label','field','options','required','bindingModelId','bindingFieldId'],
+    select:['label','field','options','required','bindingModelId','bindingFieldId','referenceDisplayFieldId'],
     checkbox:['label','field','required','bindingModelId','bindingFieldId'],
     button:['text','variant','action','targetPageId','bindingModelId'],table:['title','columns','bindingModelId']
   };
@@ -54,6 +55,8 @@
   let importElement;
   let runtimeState=$state({enabled:false,projectId:'',revision:'',reason:'Local database runtime not configured'});
   let runtimeMode=$state('memory'),liveRecords=$state({}),selectedRecords=$state({}),busy=$state(false);
+  let referenceOptions=$state({}),referenceSearch=$state({}),referenceStatus=$state({});
+  const referenceRequests=new Map();
   let loginId=$state(''),loginPassword=$state(''),authBusy=$state(false),auditVisible=$state(false),auditEvents=$state([]);
   let runtimeReady=$derived(runtimeState.enabled&&runtimeState.authenticated&&runtimeState.projectId===project.id&&runtimeState.revision===projectRevision(project));
   let page=$derived(project.pages.find(p=>p.id===activeId)??project.pages[0]);
@@ -377,12 +380,14 @@
         if(['input','textarea','select','checkbox'].includes(c.type)){
           patch.bindingFieldId=field?.id??'';
           if(field)patch.field=field.name;
+          if(c.type==='select')patch.referenceDisplayFieldId=preferredDisplayField(p.models.find(m=>m.id===field?.referenceModelId));
         }
         if(c.type==='table'&&model)patch.columns=model.fields.filter(f=>!f.primary).map(f=>f.name).join(',');
       }
-      if(key==='bindingFieldId'&&value){
+      if(key==='bindingFieldId'){
         const field=p.models.find(m=>m.id===c.props.bindingModelId)?.fields.find(f=>f.id===value);
         if(field)patch.field=field.name;
+        if(c.type==='select')patch.referenceDisplayFieldId=preferredDisplayField(p.models.find(m=>m.id===field?.referenceModelId));
       }
       const instance=findLinkedInstance(pg,c.id);
       if(instance){
@@ -434,6 +439,23 @@
     if(!response.ok)throw new Error(result.error??`Server returned HTTP ${response.status}`);
     return result;
   }
+  function referenceFor(component){
+    const model=project.models.find(m=>m.id===component.props.bindingModelId);
+    const field=model?.fields.find(f=>f.id===component.props.bindingFieldId);
+    return project.models.find(m=>m.id===field?.referenceModelId);
+  }
+  async function loadReference(component,search=''){
+    if(!runtimeReady||runtimeMode!=='mysql'||!component.props.referenceDisplayFieldId)return;
+    const pageId=page.id,requestId=(referenceRequests.get(component.id)??0)+1;
+    referenceRequests.set(component.id,requestId);
+    try{
+      const query=new URLSearchParams({pageId,q:search});
+      const response=await fetch(`/api/runtime/references/${encodeURIComponent(component.id)}?${query}`,{headers:{'x-studio-project-id':project.id,'x-studio-project-revision':projectRevision(project)},cache:'no-store'});
+      const payload=await response.json();
+      if(!response.ok)throw new Error(payload.error??'Reference lookup failed');
+      if(referenceRequests.get(component.id)===requestId) {referenceOptions={...referenceOptions,[component.id]:payload.options};referenceStatus={...referenceStatus,[component.id]:''};}
+    }catch(error){if(referenceRequests.get(component.id)===requestId)referenceStatus={...referenceStatus,[component.id]:error.message};}
+  }
   async function refreshLive(){
     if(!runtimeReady||runtimeMode!=='mysql')return;
     const ids=new Set();walkNodes(page.components,c=>{if(c.type==='table'&&c.props.bindingModelId)ids.add(c.props.bindingModelId);});
@@ -441,6 +463,7 @@
       try{const result=await requestRecords(id);liveRecords={...liveRecords,[id]:result.records};}
       catch(e){notice=`MySQL read failed: ${e.message}`;}
     }
+    walkNodes(page.components,c=>{if(c.type==='select'&&c.props.referenceDisplayFieldId)void loadReference(c,referenceSearch[c.id]??'');});
   }
   async function enterPreview(){mode='preview';selectedId='';notice='';if(runtimeMode==='mysql')await refreshLive();}
   async function chooseRuntime(value){
@@ -628,6 +651,10 @@
         <label class="field-label">{component.props.label}{#if component.props.required}<em> *</em>{/if}</label>
         {#if component.type==='input'}<input class="form-input" type={inputType(component)} step={inputType(component)==='number'?'0.0001':undefined} placeholder={component.props.placeholder} disabled={mode==='design'} value={fields[component.props.field]??''} oninput={e=>fields={...fields,[component.props.field]:e.currentTarget.value}} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.value};if(mode==='preview')void activate(component,'change');}} onblur={()=>{if(mode==='preview')void activate(component,'blur');}} />
         {:else if component.type==='textarea'}<textarea class="form-input" rows="3" placeholder={component.props.placeholder} disabled={mode==='design'} value={fields[component.props.field]??''} oninput={e=>fields={...fields,[component.props.field]:e.currentTarget.value}} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.value};if(mode==='preview')void activate(component,'change');}} onblur={()=>{if(mode==='preview')void activate(component,'blur');}}></textarea>
+        {:else if component.props.referenceDisplayFieldId}
+          <input class="form-input" type="search" maxlength="80" aria-label={`Search ${component.props.label}`} placeholder={`Search ${referenceFor(component)?.name??'records'}…`} disabled={mode==='design'||runtimeMode!=='mysql'} value={referenceSearch[component.id]??''} oninput={e=>{const query=e.currentTarget.value;referenceSearch={...referenceSearch,[component.id]:query};void loadReference(component,query);}} />
+          <select class="form-input" aria-label={component.props.label} disabled={mode==='design'||runtimeMode!=='mysql'} value={fields[component.props.field]??''} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.value};if(mode==='preview')void activate(component,'change');}}><option value="">Choose a record…</option>{#each referenceOptions[component.id]??[] as option (option.id)}<option value={option.id}>{option.label}</option>{/each}{#if fields[component.props.field]&&!((referenceOptions[component.id]??[]).some(option=>option.id===String(fields[component.props.field])))}<option value={String(fields[component.props.field])}>Selected record #{fields[component.props.field]}</option>{/if}</select>
+          {#if referenceStatus[component.id]}<small role="status">{referenceStatus[component.id]}</small>{/if}
         {:else}<select class="form-input" disabled={mode==='design'} value={fields[component.props.field]??''} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.value};if(mode==='preview')void activate(component,'change');}}><option value="">Select one…</option>{#each String(component.props.options??'').split('\n').filter(Boolean) as opt}<option value={opt}>{opt}</option>{/each}</select>{/if}
       {:else if component.type==='checkbox'}<label class="checkline"><input type="checkbox" disabled={mode==='design'} checked={Boolean(fields[component.props.field])} onchange={e=>{fields={...fields,[component.props.field]:e.currentTarget.checked};if(mode==='preview')void activate(component,'change');}} />{component.props.label}</label>
       {:else if component.type==='button'}<button class:secondary={component.props.variant==='secondary'} class="render-button" onclick={e=>{e.stopPropagation();if(mode==='preview')activate(component);}} disabled={mode==='design'}>{component.props.text}</button>
@@ -816,6 +843,11 @@
                         <div class="binding-inspector-row"><button onclick={()=>goToBindingSource(field.componentId)}>{field.field}</button><code>{field.expectedType}</code><span>{field.status} · {JSON.stringify(field.value)}</span></div>
                       {:else}<p>No form inputs on the trigger page.</p>{/each}
                     </div>
+                    <div><strong>Relationship selections</strong>
+                      {#each debugInspection.references as ref (ref.componentId)}
+                        <div class="binding-inspector-row"><button onclick={()=>goToBindingSource(ref.componentId)}>{ref.field}</button><span>{ref.status} · ID {ref.selectedId??"—"}</span><strong>{ref.label??ref.displayField}</strong></div>
+                      {:else}<p>No relationship pickers on this page.</p>{/each}
+                    </div>
                     <div><strong>Condition preview</strong>
                       {#each debugInspection.conditions as item (item.stepId)}
                         <div class="binding-inspector-row"><button onclick={()=>activeStepId=item.stepId}>{item.stepId}</button><span>{item.source} · {item.operator}</span><strong>{item.result?'TRUE':'FALSE'}</strong></div>
@@ -992,6 +1024,7 @@
               {:else if key==='targetPageId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Select destination…</option>{#each project.pages as p}<option value={p.id}>{p.name}</option>{/each}</select>
               {:else if key==='bindingModelId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Unbound</option>{#each project.models as m}<option value={m.id}>{m.name}</option>{/each}</select>
               {:else if key==='bindingFieldId'}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">No attribute</option>{#each (modelIds.get(selected.props.bindingModelId)?.fields??[]) as f}<option value={f.id}>{f.name} · {f.type}</option>{/each}</select>
+              {:else if key==='referenceDisplayFieldId'}<select value={String(selected.props.referenceDisplayFieldId??'')} onchange={e=>updateProps(key,e.currentTarget.value)}><option value="">Static options</option>{#each displayFields(referenceFor(selected)) as f}<option value={f.id}>{f.name}</option>{/each}</select>
               {:else if selectOptions[key]}<select value={String(selected.props[key]??'')} onchange={e=>updateProps(key,key==='level'?Number(e.currentTarget.value):e.currentTarget.value)}>{#each selectOptions[key] as [value,label]}<option value={value}>{label}</option>{/each}</select>
               {:else if key==='body'||key==='options'||(key==='text'&&selected.type==='text')}<textarea rows="4" value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)}></textarea>
               {:else}<input type="text" value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)} />{/if}
