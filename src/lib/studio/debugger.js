@@ -142,9 +142,13 @@ export function replayWorkflowDebug(flow,session){
   if(!session||session.workflowId!==flow?.id)throw new Error('Debugger session is for another workflow');
   const expected=copy(session.trace);
   let next=rewindWorkflowDebug(flow,session,0);
-  for(const trace of expected){
+  for(const [index,trace] of expected.entries()){
     next=stepWorkflowDebug(flow,next);
-    if(JSON.stringify(next.trace.at(-1))!==JSON.stringify(trace))
+    const previous=session.snapshots[index+1];
+    if(JSON.stringify(next.trace.at(-1))!==JSON.stringify(trace)||
+      !previous||JSON.stringify(next.effects)!==JSON.stringify(previous.effects)||
+      JSON.stringify(next.fields)!==JSON.stringify(previous.fields)||
+      JSON.stringify(next.selectedRecords)!==JSON.stringify(previous.selectedRecords))
       throw new Error(`Workflow replay diverged at ${trace.stepId}`);
   }
   return {...next,paused:session.paused};

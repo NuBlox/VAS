@@ -39,6 +39,9 @@ test('deterministic replay reproduces true/false outcomes and detects changes to
     const modified=structuredClone(flow);
     modified.steps.find(x=>x.id==='step_check_name').operator='empty';
     assert.throws(()=>replayWorkflowDebug(modified,state),/replay diverged/);
+    const changedMessage=structuredClone(flow);
+    changedMessage.steps.find(x=>x.id===(name?'step_customer_created':'step_name_required')).text='A changed effect';
+    assert.throws(()=>replayWorkflowDebug(changedMessage,state),/replay diverged/);
   }
 });
 
