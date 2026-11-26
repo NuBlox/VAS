@@ -16,6 +16,11 @@
   let referenceOptions = {};
   let referenceQueries = {};
   let referenceErrors = {};
+  let relatedRecords = {};
+  let relatedPages = {};
+  let relatedErrors = {};
+  let detailRecords = {};
+  const activeRelationRequests = new Map();
   const activeLookupRequests = new Map();
   let runtime = null;
   let username = '';
@@ -25,24 +30,33 @@
   let pendingWorkflow = null;
 
   const headers = { 'x-studio-project-id': project.id, 'x-studio-project-revision': revision };
-  function setPage(pageId, push = true) {
+  function setPage(pageId, push = true, preserveSelection = false) {
     const page = project.pages.find(p => p.id === pageId);
     if (!page) return;
     currentPage = page;
     fields = {};
-    selected = {};
+    if (!preserveSelection) selected = {};
     notice = '';
     pendingWorkflow = null;
     if (push && typeof window !== 'undefined') window.history.pushState({}, '', page.path);
-    if(runtime?.authenticated)void refreshReferences();
+    if(runtime?.authenticated){void refreshReferences();void refreshRelated();}
   }
   function change(field, value) { fields = { ...fields, [field]: value }; }
-  function choose(modelId, item) {
+  function choose(modelId, item, detailPageId = '') {
     const model = project.models.find(m => m.id === modelId);
     if (!model) return;
     const pk = model.fields.find(f => f.primary)?.name;
     if (!pk) return;
-    selected = { ...selected, [modelId]: String(item[pk]) };
+    const nextSelected={...selected,[modelId]:String(item[pk])};
+    const nextDetails={...detailRecords,[modelId]:item};
+    // An old child selection must never survive a change of parent.
+    for(const page of project.pages)walkNodes(page.components,node=>{
+      if(node.type==='table'&&node.props.relationParentModelId===modelId){
+        delete nextSelected[node.props.bindingModelId];delete nextDetails[node.props.bindingModelId];
+      }
+    });
+    selected = nextSelected;
+    detailRecords = nextDetails;
     const values = {};
     walkNodes(currentPage.components, n => {
       if (n.props?.bindingModelId !== modelId || !n.props.bindingFieldId) return;
@@ -50,6 +64,8 @@
       if (field && n.props.field && field.name in item) values[n.props.field] = item[field.name];
     });
     fields = { ...fields, ...values };
+    if (detailPageId) setPage(detailPageId, true, true);
+    else void refreshRelated();
   }
   async function request(path, options = {}) {
     const response = await fetch(endpoint + path, { credentials: 'same-origin', cache: 'no-store', ...options, headers: { ...headers, ...(options.headers ?? {}) } });
@@ -65,7 +81,7 @@
     if (!runtime?.authenticated) return;
     const ids = new Set();
     for (const page of project.pages) walkNodes(page.components, n => {
-      if (n.type === 'table' && n.props.bindingModelId) ids.add(n.props.bindingModelId);
+      if (n.type === 'table' && n.props.bindingModelId && !n.props.relationParentModelId) ids.add(n.props.bindingModelId);
     });
     const updated = {};
     for (const modelId of ids) {
@@ -74,6 +90,7 @@
     }
     records = updated;
     await refreshReferences();
+    await refreshRelated();
   }
   async function refreshReferences(){
     const nodes=[];walkNodes(currentPage.components,node=>{if(node.type==='select'&&node.props.referenceDisplayFieldId)nodes.push(node);});
@@ -88,6 +105,29 @@
       if(activeLookupRequests.get(node.id)===number){referenceOptions={...referenceOptions,[node.id]:result.options};referenceErrors={...referenceErrors,[node.id]:''};}
     } catch(error){if(activeLookupRequests.get(node.id)===number)referenceErrors={...referenceErrors,[node.id]:error.message};}
   }
+  async function refreshRelated(){
+    if(!runtime?.authenticated)return;
+    const nodes=[];
+    walkNodes(currentPage.components,node=>{if(node.type==='table'&&node.props.relationParentModelId)nodes.push(node);});
+    await Promise.all(nodes.map(node=>loadRelated(node,relatedPages[node.id]??0)));
+  }
+  async function loadRelated(node,pageNumber=0){
+    if(!runtime?.authenticated)return;
+    const parentId=selected[node.props.relationParentModelId];
+    const sequence=(activeRelationRequests.get(node.id)??0)+1;
+    activeRelationRequests.set(node.id,sequence);
+    if(!parentId){relatedRecords={...relatedRecords,[node.id]:{records:[],page:0,hasMore:false}};relatedErrors={...relatedErrors,[node.id]:''};return;}
+    relatedRecords={...relatedRecords,[node.id]:{records:[],page:pageNumber,hasMore:false}};
+    const params=new URLSearchParams({pageId:currentPage.id,parentId,page:String(pageNumber),limit:'20'});
+    try{
+      const response=await request('/relations/'+encodeURIComponent(node.id)+'?'+params);
+      if(activeRelationRequests.get(node.id)!==sequence)return;
+      relatedRecords={...relatedRecords,[node.id]:response};
+      relatedPages={...relatedPages,[node.id]:pageNumber};
+      relatedErrors={...relatedErrors,[node.id]:''};
+    }catch(error){if(activeRelationRequests.get(node.id)===sequence){relatedRecords={...relatedRecords,[node.id]:{records:[],page:0,hasMore:false}};relatedErrors={...relatedErrors,[node.id]:error.message};}}
+  }
+  function changeRelatedPage(node,pageNumber){void loadRelated(node,pageNumber);}
   function changeReferenceQuery(node,query){referenceQueries={...referenceQueries,[node.id]:query};void searchReference(node,query);}
   async function login() {
     busy = true; notice = '';
@@ -100,7 +140,7 @@
   }
   async function logout() {
     busy = true;
-    try { await request('/auth/logout', { method:'POST' }); runtime = null; records = {}; selected = {}; fields = {}; referenceOptions = {}; pendingWorkflow = null; await refreshStatus(); }
+    try { await request('/auth/logout', { method:'POST' }); runtime = null; records = {}; selected = {}; fields = {}; relatedRecords = {}; detailRecords = {}; referenceOptions = {}; pendingWorkflow = null; await refreshStatus(); }
     catch(error){notice=error.message;}finally{busy=false;}
   }
   function boundValues(modelId) {
@@ -126,7 +166,7 @@
     const props = node.props;
     const workflow = project.workflows.find(w => w.trigger.pageId === currentPage.id && w.trigger.componentId === node.id && w.trigger.event === event);
     if (!workflow && event !== 'click') return;
-    if (!workflow && props.action === 'navigate') { setPage(props.targetPageId); return; }
+    if (!workflow && props.action === 'navigate') { setPage(props.targetPageId,true,Boolean(props.keepSelection)); return; }
     if (!workflow && props.action === 'message') { notice = props.text || 'Action completed'; return; }
     if (!workflow && props.action === 'reset') { fields = {}; selected = {}; return; }
     if (!runtime?.authenticated) { notice = 'Sign in to use database actions'; return; }
@@ -201,7 +241,7 @@
     {#if runtime && !runtime.enabled}<p class="warning">Database runtime unavailable. This generated application remains usable for navigation and layout preview, but persistent records require configured localhost MySQL and a local account.</p>{/if}
     <div class="canvas">
       {#each renderPageComponents(project,currentPage,{fields,records,selected}) as node (node.id)}
-        <RenderNode {node} {fields} {records} {selected} {primaryNames} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
+        <RenderNode {node} {fields} {records} {selected} {primaryNames} {detailRecords} {relatedRecords} {relatedErrors} {changeRelatedPage} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
       {/each}
     </div>
   </main></div>

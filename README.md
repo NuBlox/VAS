@@ -1,3 +1,32 @@
+# Visual Application Studio v1.9 — Visual master/detail relationships
+
+VAS 1.9 adds **Generate master-detail pages** in the Data Model inspector. Select a parent entity, choose a child foreign-key relationship, and VAS creates two editable pages: a parent record selector with a paginated related-child table, and a selected child detail page with return navigation. The record table inspector exposes the parent model, published foreign-key field and detail-page destination; a **Selected record** display component renders the chosen child. Existing v1.8 projects remain valid (schema v3, no database migration).
+
+**Security/limits:** the new `/api/runtime/relations/[componentId]` endpoint resolves only published component and model metadata, requires the local actor to read both parent and child models, verifies that the parent record exists, and uses parameterised bounded MySQL queries (1–25 rows/page, maximum page index 40). It rejects arbitrary identifiers, SQL and missing/forged parent IDs. There is no tenant model or hosted identity; this is **localhost-only development software** and must not be exposed publicly. A record-detail page shows the selected record within the current browser session; it does not accept arbitrary record IDs in a public URL. Debugger relationship counts come only from an in-memory trial snapshot and never perform MySQL writes.
+
+## Verify on macOS
+
+```bash
+cd ~/Developer/VAS
+git switch main && git pull --ff-only origin main
+npm install && npm test && npm run check && npm run build
+npm run dev -- --host 127.0.0.1 --open
+```
+
+Generate an acceptance application with a Customer→Orders view without editing SvelteKit code:
+
+```bash
+npm run master-detail:generate -- ~/Developer/vas19-customer-orders.project.json
+npm run app:export -- --project ~/Developer/vas19-customer-orders.project.json --out ~/Developer/vas19-customer-orders
+cd ~/Developer/vas19-customer-orders
+npm install && npm run verify:release && npm test && npm run check && npm run build
+npm run dev -- --host 127.0.0.1 --open
+```
+
+The exporter never applies migrations; for live data you must explicitly configure the existing local MySQL development runtime and review the generated database SQL. CI runs the new `npm run test:master-detail:mysql` gate against a disposable MySQL 8 service, then verifies and builds a generated standalone application. For local integration testing you must set `MYSQL_INTEGRATION=1 VAS_ACCEPTANCE_DISPOSABLE=yes` only against a disposable `visual_studio_dev` database on 127.0.0.1: the acceptance test drops its synthetic test tables.
+
+---
+
 # Visual Application Studio · v1.8 — Searchable Relationship Pickers
 
 VAS v1.8 adds declarative reference dropdowns for existing model foreign keys. Scaffolded Customer/Order forms now show a searchable customer picker, display customer names and submit canonical IDs. A picker is a normal `select` control with `referenceDisplayFieldId`; it must be bound to a published model field with a validated foreign-key relationship. The reference target and display column cannot be specified by the browser.

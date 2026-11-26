@@ -50,6 +50,15 @@ jobs:
           DB_USER: root
           DB_PASSWORD: ci_ephemeral_password
         run: npm run test:acceptance:mysql
+      - name: Master-detail parent/child access acceptance against disposable MySQL
+        env:
+          MYSQL_INTEGRATION: '1'
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: visual_studio_dev
+          DB_USER: root
+          DB_PASSWORD: ci_ephemeral_password
+        run: npm run test:master-detail:mysql
       - name: Svelte static analysis
         run: npm run check
       - name: Production build
@@ -102,6 +111,16 @@ jobs:
           npm run scaffold:generate -- "$RUNNER_TEMP/vas-scaffold.project.json"
           npm run app:export -- --project "$RUNNER_TEMP/vas-scaffold.project.json" --out "$RUNNER_TEMP/vas-scaffold-application"
           cd "$RUNNER_TEMP/vas-scaffold-application"
+          npm install
+          npm run verify:release
+          npm test
+          npm run check
+          npm run build
+      - name: Export and compile master-detail Customer Order application
+        run: |
+          npm run master-detail:generate -- "$RUNNER_TEMP/vas19-master-detail.json"
+          npm run app:export -- --project "$RUNNER_TEMP/vas19-master-detail.json" --out "$RUNNER_TEMP/vas19-master-detail"
+          cd "$RUNNER_TEMP/vas19-master-detail"
           npm install
           npm run verify:release
           npm test
