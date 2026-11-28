@@ -136,3 +136,13 @@ jobs:
           npm test
           npm run check
           npm run build
+      - name: Export and compile v2.1 compound-filter Customer Order application
+        run: |
+          npm run query:generate -- "$RUNNER_TEMP/vas-query-v21.project.json"
+          npm run app:export -- --project "$RUNNER_TEMP/vas-query-v21.project.json" --out "$RUNNER_TEMP/vas-query-v21-application"
+          cd "$RUNNER_TEMP/vas-query-v21-application"
+          npm install
+          npm run verify:release
+          npm test
+          npm run check
+          npm run build

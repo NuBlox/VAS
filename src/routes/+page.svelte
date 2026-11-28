@@ -9,7 +9,7 @@
   import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug, rewindWorkflowDebug, replayWorkflowDebug } from '#lib/studio/debugger.js';
   import { inspectWorkflowContext } from '#lib/studio/inspection.js';
   import { scaffoldModelCrud } from '#lib/studio/scaffold.js';
-  import { createDataView, inspectDataView } from '#lib/studio/data-views.js';
+  import { createDataView, inspectDataView, operatorsForField, defaultLiteral, describeDataView } from '#lib/studio/data-views.js';
   import ViewTable from '#lib/studio/ViewTable.svelte';
   import { preferredDisplayField, displayFields } from '#lib/studio/references.js';
   import { scaffoldMasterDetail } from '#lib/studio/master-detail.js';
@@ -400,6 +400,78 @@
     return Boolean(field&&field.id===node.props.relationFieldId&&field.referenceModelId===node.props.relationParentModelId);
   }
 
+  function availableFormFilterFields(field){
+    const choices=[];
+    walkNodes(page.components,node=>{
+      if(!['input','textarea','select','checkbox'].includes(node.type)||!node.props?.field)return;
+      const linkedModel=project.models.find(m=>m.id===node.props.bindingModelId);
+      const typed=linkedModel?.fields.find(f=>f.id===node.props.bindingFieldId);
+      if(typed&&typed.type!==field.type)return;
+      if(node.type==='checkbox'&&field.type!=='boolean')return;
+      if(choices.some(item=>item.name===node.props.field))return;
+      choices.push({name:node.props.field,label:node.props.label??node.props.field});
+    });
+    return choices;
+  }
+  function selectedFilterModels(field){
+    return project.models.filter(m=>m.fields.some(f=>f.primary&&f.type===field.type));
+  }
+  function viewBoundValues(view){
+    return Object.fromEntries(view.filters.flatMap((filter,i)=>{
+      if(filter.source==='form')return fields[filter.binding]===undefined?[]:[[String(i),fields[filter.binding]]];
+      if(filter.source==='selected')return selectedRecords[filter.binding]===undefined?[]:[[String(i),selectedRecords[filter.binding]]];
+      return [];
+    }));
+  }
+  function updateViewFilter(index,patch){
+    if(!selectedView||!selectedViewModel)return;
+    const prior=selectedView.filters[index];
+    if(!prior||prior.source==='parent'){notice='The parent-record restriction cannot be changed here.';return;}
+    const field=selectedViewModel.fields.find(f=>f.name===(patch.field??prior.field));
+    if(!field){notice='Choose a published field.';return;}
+    const source=patch.source??prior.source;
+    let operator=patch.operator??prior.operator;
+    const allowed=operatorsForField(field.type);
+    if(source==='search'){
+      if(!['text','string'].includes(field.type)){notice='Search requires text.';return;}
+      if(selectedView.filters.some((f,i)=>i!==index&&f.source==='search')){notice='Only one text search is supported.';return;}
+      operator='contains';
+    }else if(!allowed.includes(operator))operator=allowed[0];
+    const next={field:field.name,operator,source};
+    if(source==='literal'){
+      next.value=Object.hasOwn(patch,'value')?patch.value:prior.source==='literal'&&prior.field===field.name?prior.value:defaultLiteral(field);
+    }else if(source==='form'){
+      const candidates=availableFormFilterFields(field);
+      const choice=patch.binding??(prior.source==='form'?prior.binding:candidates[0]?.name);
+      if(!candidates.some(c=>c.name===choice)){notice='Add a matching form control to this page first.';return;}
+      next.binding=choice;
+    }else if(source==='selected'){
+      const models=selectedFilterModels(field);
+      const choice=patch.binding??(prior.source==='selected'?prior.binding:models[0]?.id);
+      if(!models.some(model=>model.id===choice)){notice='Choose a selected model with a matching primary-key type.';return;}
+      next.binding=choice;
+    }
+    editDataView(view=>{view.filters[index]=next;});
+  }
+  function addViewFilter(){
+    if(!selectedViewModel||!selectedView)return;
+    const field=selectedViewModel.fields.find(f=>!f.primary&&!f.referenceModelId)??selectedViewModel.fields[0];
+    if(!field)return;
+    editDataView(view=>{
+      if(view.filters.length>=5)throw Error('Maximum five filters per view');
+      view.filters.push({field:field.name,operator:operatorsForField(field.type)[0],source:'literal',value:defaultLiteral(field)});
+    });
+  }
+  function removeViewFilter(i){
+    if(selectedView?.filters[i]?.source==='parent'){notice='The parent filter is mandatory.';return;}
+    editDataView(view=>{view.filters.splice(i,1);});
+  }
+  function moveViewFilter(i,dir){
+    editDataView(view=>{const target=i+dir;if(target<0||target>=view.filters.length)return;
+      [view.filters[i],view.filters[target]]=[view.filters[target],view.filters[i]];
+    });
+  }
+
   function saveSelectedTemplate(){
     if(!selected)return;
     const name=templateName.trim()||selected.props.title||selected.props.text||CATALOG.find(x=>x.type===selected.type)?.label||selected.type;
@@ -753,7 +825,7 @@
         {:else}<p>Choose a related record to view its details.</p>{/if}
       </div>
       {:else if component.type==='table' && component.props.dataViewId}
-        <ViewTable node={component} {project} pageId={page.id} records={runtimeMode==='mysql'?liveRecords:{}} selected={selectedRecords} runtimeActive={mode==='preview'&&runtimeMode==='mysql'&&runtimeReady} onSelect={item=>selectRecord(component.props.bindingModelId,item)} />
+        <ViewTable node={component} {project} pageId={page.id} records={runtimeMode==='mysql'?liveRecords:{}} selected={selectedRecords} {fields} runtimeActive={mode==='preview'&&runtimeMode==='mysql'&&runtimeReady} onSelect={item=>selectRecord(component.props.bindingModelId,item)} />
       {:else if component.type==='table'}<div class="table-wrap"><h3>{component.props.title}</h3><table><thead><tr>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<th>{col.trim()}</th>{/each}{#if mode==='preview'&&runtimeMode==='mysql'&&component.props.bindingModelId}<th>Record</th>{/if}</tr></thead><tbody>
         {#if mode==='preview'&&runtimeMode==='mysql'&&component.props.bindingModelId}
           {#each (component.props.relationParentModelId?(relatedRecords[component.id]?.records??[]):(liveRecords[component.props.bindingModelId]??[])) as record,i}
@@ -1170,7 +1242,62 @@
                   {#each (selectedViewModel?.fields??[]).filter(f=>['string','text'].includes(f.type)) as field (field.id)}<option value={field.name}>{field.name}</option>{/each}
                 </select>
               </label>
-              <p class="hint">Published query · {selectedView.filters.map(f=>`${f.source}: ${f.field} ${f.operator}`).join(' · ')||'No filters'}. Only published field names, typed predicates and bounded results are accepted.</p>
+              <div class="section-label">AND FILTER BUILDER</div>
+              <p class="hint">Every predicate uses an allowlisted field and operator. Runtime values can bind to a form control or selected record; the server validates all values against the published view.</p>
+              {#each selectedView.filters as filter,index (`${selectedView.id}-${index}`)}
+                <div class="view-predicate">
+                  <strong>Filter {index+1} {filter.source==='parent'?'· Mandatory parent':''}</strong>
+                  <label class="property-label">Field
+                    <select value={filter.field} disabled={filter.source==='parent'} onchange={e=>updateViewFilter(index,{field:e.currentTarget.value})}>
+                      {#each (selectedViewModel?.fields??[]).filter(f=>filter.source!=='search'||['string','text'].includes(f.type)) as f (f.id)}<option value={f.name}>{f.name} ({f.type})</option>{/each}
+                    </select>
+                  </label>
+                  <label class="property-label">Operator
+                    <select value={filter.operator} disabled={filter.source==='search'||filter.source==='parent'} onchange={e=>updateViewFilter(index,{operator:e.currentTarget.value})}>
+                      {#each operatorsForField(selectedViewModel?.fields.find(f=>f.name===filter.field)?.type) as op}<option value={op}>{op==='eq'?'Equals':op==='contains'?'Contains':op==='gte'?'Greater than / equals':'Less than / equals'}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="property-label">Value source
+                    <select value={filter.source} disabled={filter.source==='parent'} onchange={e=>updateViewFilter(index,{source:e.currentTarget.value})}>
+                      {#if filter.source==='parent'}<option value="parent">Mandatory selected parent</option>{/if}
+                      {#if filter.source==='search'}<option value="search">Search box</option>{/if}
+                      <option value="literal">Typed constant</option>
+                      <option value="form">Page form field</option>
+                      <option value="selected">Selected record ID</option>
+                    </select>
+                  </label>
+                  {#if filter.source==='literal'}
+                    {#if selectedViewModel?.fields.find(f=>f.name===filter.field)?.type==='boolean'}
+                      <label class="property-label">Value <input type="checkbox" checked={filter.value===true} onchange={e=>updateViewFilter(index,{value:e.currentTarget.checked})} /></label>
+                    {:else}
+                      <label class="property-label">Value
+                        <input type={selectedViewModel?.fields.find(f=>f.name===filter.field)?.type==='date'?'date':selectedViewModel?.fields.find(f=>f.name===filter.field)?.type==='datetime'?'datetime-local':['integer','decimal'].includes(selectedViewModel?.fields.find(f=>f.name===filter.field)?.type)?'number':'text'} value={String(filter.value??'')} onchange={e=>updateViewFilter(index,{value:e.currentTarget.value})} />
+                      </label>
+                    {/if}
+                  {:else if filter.source==='form'}
+                    <label class="property-label">Form field
+                      <select value={filter.binding} onchange={e=>updateViewFilter(index,{binding:e.currentTarget.value})}>
+                        {#each availableFormFilterFields(selectedViewModel.fields.find(f=>f.name===filter.field)) as option (option.name)}<option value={option.name}>{option.label}</option>{/each}
+                      </select>
+                    </label>
+                  {:else if filter.source==='selected'}
+                    <label class="property-label">Selected model
+                      <select value={filter.binding} onchange={e=>updateViewFilter(index,{binding:e.currentTarget.value})}>
+                        {#each selectedFilterModels(selectedViewModel.fields.find(f=>f.name===filter.field)) as model (model.id)}<option value={model.id}>{model.name}</option>{/each}
+                      </select>
+                    </label>
+                  {/if}
+                  <div class="inspector-buttons">
+                    <button onclick={()=>moveViewFilter(index,-1)} disabled={index===0}>Move up</button>
+                    <button onclick={()=>moveViewFilter(index,1)} disabled={index===selectedView.filters.length-1}>Move down</button>
+                    {#if filter.source!=='parent'}<button class="danger" onclick={()=>removeViewFilter(index)}>Remove</button>{/if}
+                  </div>
+                </div>
+              {/each}
+              <button class="model-add" disabled={selectedView.filters.length>=5} onclick={addViewFilter}>+ Add AND filter</button>
+              <div class="section-label">READ-ONLY QUERY EXPLANATION</div>
+              <pre class="hint">{JSON.stringify({source:'published data view', model:selectedViewModel?.table,sort:selectedView.sort,pageSize:selectedView.pageSize,predicates:describeDataView(selectedView,viewBoundValues(selectedView))},null,2)}</pre>
+
               <pre class="hint">{JSON.stringify({sort:selectedView.sort,filters:selectedView.filters,pageSize:selectedView.pageSize},null,2)}</pre>
             {/if}
           {/if}

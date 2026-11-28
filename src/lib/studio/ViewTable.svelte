@@ -6,6 +6,7 @@
   export let pageId;
   export let records = {};
   export let selected = {};
+  export let fields = {};
   export let runtimeActive = false;
   export let onSelect = () => {};
 
@@ -18,26 +19,34 @@
   $: view = (project?.dataViews ?? []).find(v => v.id === node?.props?.dataViewId);
   $: parentId = node?.props?.relationParentModelId ? selected[node.props.relationParentModelId] : '';
   $: parentMissing = Boolean(node?.props?.relationParentModelId) && (parentId === '' || parentId === undefined || parentId === null);
-  $: offline = view ? inspectDataView(view, records?.[view.modelId] ?? [], {query: search, parentId, page: pageNumber}) : {records: [], page: 0, hasMore: false};
+  $: bindings = Object.fromEntries((view?.filters??[]).flatMap((filter,index)=>{
+    if(filter.source==='form')return fields[filter.binding]===undefined?[]:[[String(index),fields[filter.binding]]];
+    if(filter.source==='selected')return selected[filter.binding]===undefined?[]:[[String(index),selected[filter.binding]]];
+    return [];
+  }));
+  $: missingBindings = (view?.filters??[]).some((filter,index)=>['form','selected'].includes(filter.source) &&
+    (bindings[index]===undefined||bindings[index]===null||bindings[index]===''));
+  $: offline = view ? inspectDataView(view, records?.[view.modelId] ?? [], {query: search, parentId, page: pageNumber,bindings}) : {records: [], page: 0, hasMore: false};
   $: displayed = runtimeActive ? result : offline;
   $: columns = view?.columns ?? [];
   $: primary = project?.models.find(m => m.id === view?.modelId)?.fields.find(f => f.primary)?.name ?? 'id';
-  $: if (runtimeActive && view && !parentMissing) {
-    const key = JSON.stringify([pageId, node?.id, pageNumber, search, parentId]);
+  $: if (runtimeActive && view && !parentMissing && !missingBindings) {
+    const key = JSON.stringify([pageId, node?.id, pageNumber, search, parentId, bindings]);
     if (key !== requestKey) { requestKey = key; void load(); }
   } else { requestKey = ''; result = {records: [], page: 0, hasMore: false}; failure = ''; }
 
   async function load(){
     const request = ++requestNumber;
     const selectedParent=String(parentId),requestedSearch=search,requestedPage=pageNumber;
-    const params = new URLSearchParams({pageId, page: String(pageNumber), q: search});
+    const params = new URLSearchParams({pageId, page: String(pageNumber), q: search, bindings: JSON.stringify(bindings)});
     if (node.props.relationParentModelId) params.set('parentId', String(parentId));
+    const expectedBindings=JSON.stringify(bindings);
     try {
       const response = await fetch('/api/runtime/views/' + encodeURIComponent(node.id) + '?' + params, {cache:'no-store'});
       const body = await response.json();
       if (!response.ok) throw Error(body.error ?? 'Data view unavailable');
-      if (request === requestNumber && String(parentId)===selectedParent && search===requestedSearch && pageNumber===requestedPage) {result = body; failure = '';}
-    } catch (error) { if (request === requestNumber && String(parentId)===selectedParent && search===requestedSearch && pageNumber===requestedPage) {result={records:[],page:0,hasMore:false};failure=error.message;} }
+      if (request === requestNumber && String(parentId)===selectedParent && search===requestedSearch && pageNumber===requestedPage && JSON.stringify(bindings)===expectedBindings) {result = body; failure = '';}
+    } catch (error) { if (request === requestNumber && String(parentId)===selectedParent && search===requestedSearch && pageNumber===requestedPage && JSON.stringify(bindings)===expectedBindings) {result={records:[],page:0,hasMore:false};failure=error.message;} }
   }
   function searchChanged(event){search=event.currentTarget.value;pageNumber=0;}
 </script>
@@ -49,11 +58,12 @@
       <label class="view-search">Search records<input aria-label={'Search ' + view.name} type="search" maxlength="80" value={search} on:input={searchChanged} placeholder="Search…" /></label>
     {/if}
     {#if parentMissing}<p>Select a parent record to display related rows.</p>{/if}
+    {#if missingBindings}<p role="status">Set the required form or selected-record filter to display results.</p>{/if}
     {#if failure}<p role="status">{failure}</p>{/if}
     <div class="view-scroll"><table>
       <thead><tr><th>Select</th>{#each columns as column}<th>{column}</th>{/each}</tr></thead>
       <tbody>
-        {#if !parentMissing}
+        {#if !parentMissing && !missingBindings}
           {#each displayed.records as row (String(row[primary]))}
             <tr><td><button type="button" class="view-select" aria-label={'Select record ' + row[primary]} on:click={() => onSelect(row)}>Select</button></td>
               {#each columns as column}<td>{String(row[column] ?? '—')}</td>{/each}</tr>

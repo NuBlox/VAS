@@ -74,7 +74,7 @@
     {:else}<p>Choose a record from the related list to view its details.</p>{/if}
   </section>
 {:else if node.type === 'table' && props.dataViewId}
-  <ViewTable {node} {project} {pageId} {records} {selected} {runtimeActive} onSelect={item=>choose(props.bindingModelId,item,props.detailPageId??'')} />
+  <ViewTable {node} {project} {pageId} {records} {selected} {fields} {runtimeActive} onSelect={item=>choose(props.bindingModelId,item,props.detailPageId??'')} />
 {:else if node.type === 'table'}
   <section class="table-wrap"><h3>{props.title}</h3>
     {#if !props.bindingModelId}<p>Bind this table to a model to display records.</p>
