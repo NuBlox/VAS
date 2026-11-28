@@ -1,6 +1,7 @@
 /** Safe, portable, metadata-first project definitions. Older projects migrate without data loss. */
 import { createStep, validateWorkflows } from './workflow.js';
 import { pickerMetadata } from './references.js';
+import { validateDataViews } from './data-views.js';
 import { relationshipMetadata, detailMetadata, columnNames } from './relations.js';
 export const SCHEMA_VERSION = 3;
 export const FIELD_TYPES = ['string', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime'];
@@ -601,5 +602,6 @@ export function validateProject(project) {
   }
   for(const page of project.pages)checkRoots(page.components,page);
   validateWorkflows(project,walkNodes);
+  validateDataViews(project);
   return project;
 }

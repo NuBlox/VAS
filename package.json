@@ -1,7 +1,7 @@
 {
   "name": "visual-application-studio",
   "private": true,
-  "version": "1.9.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -17,7 +17,8 @@
     "test:acceptance:mysql": "node --test tests/customer-order.mysql.mjs",
     "scaffold:generate": "node scripts/generate-scaffold-fixture.mjs",
     "master-detail:generate": "node scripts/generate-master-detail-fixture.mjs",
-    "test:master-detail:mysql": "node --test tests/master-detail.mysql.mjs"
+    "test:master-detail:mysql": "node --test tests/master-detail.mysql.mjs",
+    "views:generate": "node scripts/generate-view-fixture.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^9.0.0",
