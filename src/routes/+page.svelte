@@ -9,6 +9,8 @@
   import { startWorkflowDebug, stepWorkflowDebug, finishWorkflowDebug, continueWorkflowDebug, rewindWorkflowDebug, replayWorkflowDebug } from '#lib/studio/debugger.js';
   import { inspectWorkflowContext } from '#lib/studio/inspection.js';
   import { scaffoldModelCrud } from '#lib/studio/scaffold.js';
+  import { createDataView, inspectDataView } from '#lib/studio/data-views.js';
+  import ViewTable from '#lib/studio/ViewTable.svelte';
   import { preferredDisplayField, displayFields } from '#lib/studio/references.js';
   import { scaffoldMasterDetail } from '#lib/studio/master-detail.js';
   import { relatedRows, relationshipMetadata } from '#lib/studio/relations.js';
@@ -67,6 +69,8 @@
   let page=$derived(project.pages.find(p=>p.id===activeId)??project.pages[0]);
   let selected=$derived(findNodeLocation(page,selectedId)?.node);
   let linked=$derived(findLinkedInstance(page,selectedId));
+  let selectedView=$derived((project.dataViews??[]).find(v=>v.id===selected?.props?.dataViewId));
+  let selectedViewModel=$derived(project.models.find(m=>m.id===selectedView?.modelId));
   let linkedTemplate=$derived(linked?project.templates?.find(t=>t.id===linked.templateId):null);
   let composedNodes=$derived(renderPageComponents(project,page,{fields,records:runtimeMode==='mysql'?liveRecords:records,selected:selectedRecords}));
   let activeModel=$derived(project.models.find(m=>m.id===activeModelId));
@@ -353,6 +357,49 @@
     safe(p=>updateLinkedSlotNode(p,activeId,linked.root.id,name,child.id,{[key]:value}));
   }
 
+  // Versioned data views can be reused by multiple tables with the same bound model.
+  function createViewForTable(){
+    if(selected?.type!=='table'||!selected.props.bindingModelId){notice='Bind a table to an entity first.';return;}
+    safe(p=>{
+      const node=findNodeLocation(p.pages.find(x=>x.id===activeId),selectedId).node;
+      const model=p.models.find(m=>m.id===node.props.bindingModelId);
+      const foreign=model.fields.find(f=>f.id===node.props.relationFieldId);
+      const view=createDataView(model,{id:createId('view'),parentField:foreign?.name??''});
+      p.dataViews??=[];p.dataViews.push(view);
+      node.props.dataViewId=view.id;node.props.columns=view.columns.join(',');
+    });
+  }
+  function attachDataView(id){
+    safe(p=>{
+      const node=findNodeLocation(p.pages.find(x=>x.id===activeId),selectedId).node;
+      const view=p.dataViews?.find(v=>v.id===id);
+      if(id&&!view)throw Error('Unknown data view');
+      node.props.dataViewId=id;
+      if(view)node.props.columns=view.columns.join(',');
+    });
+  }
+  function editDataView(fn){
+    if(!selectedView)return;
+    safe(p=>{
+      const view=p.dataViews.find(v=>v.id===selectedView.id);
+      fn(view);view.revision++;
+    });
+  }
+  function setViewSearchField(field){
+    editDataView(v=>{
+      v.filters=v.filters.filter(f=>f.source!=='search');
+      if(field)v.filters.unshift({field,operator:'contains',source:'search'});
+    });
+  }
+  function viewCompatible(view,node){
+    if(view.modelId!==node.props.bindingModelId)return false;
+    const parentFilter=view.filters.find(f=>f.source==='parent');
+    if(!node.props.relationParentModelId)return !parentFilter;
+    const model=project.models.find(m=>m.id===view.modelId);
+    const field=model?.fields.find(f=>f.name===parentFilter?.field);
+    return Boolean(field&&field.id===node.props.relationFieldId&&field.referenceModelId===node.props.relationParentModelId);
+  }
+
   function saveSelectedTemplate(){
     if(!selected)return;
     const name=templateName.trim()||selected.props.title||selected.props.text||CATALOG.find(x=>x.type===selected.type)?.label||selected.type;
@@ -399,6 +446,7 @@
         if(field)patch.field=field.name;
         if(c.type==='select')patch.referenceDisplayFieldId=preferredDisplayField(p.models.find(m=>m.id===field?.referenceModelId));
       }
+      if(c.type==='table'&&['bindingModelId','relationParentModelId','relationFieldId'].includes(key))patch.dataViewId='';
       const instance=findLinkedInstance(pg,c.id);
       if(instance){
         if(editScope==='master')editMasterProperties(p,instance.templateId,c.sourceTemplateNodeId,patch);
@@ -704,6 +752,8 @@
           <dl>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<dt>{col.trim()}</dt><dd>{String(detailRecords[component.props.bindingModelId][col.trim()]??'—')}</dd>{/each}</dl>
         {:else}<p>Choose a related record to view its details.</p>{/if}
       </div>
+      {:else if component.type==='table' && component.props.dataViewId}
+        <ViewTable node={component} {project} pageId={page.id} records={runtimeMode==='mysql'?liveRecords:{}} selected={selectedRecords} runtimeActive={mode==='preview'&&runtimeMode==='mysql'&&runtimeReady} onSelect={item=>selectRecord(component.props.bindingModelId,item)} />
       {:else if component.type==='table'}<div class="table-wrap"><h3>{component.props.title}</h3><table><thead><tr>{#each String(component.props.columns??'').split(',').filter(Boolean) as col}<th>{col.trim()}</th>{/each}{#if mode==='preview'&&runtimeMode==='mysql'&&component.props.bindingModelId}<th>Record</th>{/if}</tr></thead><tbody>
         {#if mode==='preview'&&runtimeMode==='mysql'&&component.props.bindingModelId}
           {#each (component.props.relationParentModelId?(relatedRecords[component.id]?.records??[]):(liveRecords[component.props.bindingModelId]??[])) as record,i}
@@ -1092,6 +1142,38 @@
               {:else}<input type="text" value={String(selected.props[key]??'')} onchange={e=>updateProps(key,e.currentTarget.value)} />{/if}
             </label>
           {/each}
+          {#if selected.type==='table'}
+            <div class="section-label">REUSABLE DATA VIEW</div>
+            <label class="property-label">Published view
+              <select value={selected.props.dataViewId??''} onchange={e=>attachDataView(e.currentTarget.value)}>
+                <option value="">Legacy record list</option>
+                {#each (project.dataViews??[]).filter(v=>viewCompatible(v,selected)) as v (v.id)}
+                  <option value={v.id}>{v.name} · v{v.revision}</option>
+                {/each}
+              </select>
+            </label>
+            <button class="model-add" onclick={createViewForTable}>+ Create reusable data view</button>
+            {#if selectedView}
+              <label class="property-label">View name<input value={selectedView.name} onchange={e=>editDataView(v=>v.name=e.currentTarget.value)} /></label>
+              <label class="property-label">Sort field
+                <select value={selectedView.sort.field} onchange={e=>editDataView(v=>v.sort.field=e.currentTarget.value)}>
+                  {#each selectedViewModel?.fields??[] as field (field.id)}<option value={field.name}>{field.name} ({field.type})</option>{/each}
+                </select>
+              </label>
+              <label class="property-label">Sort order
+                <select value={selectedView.sort.direction} onchange={e=>editDataView(v=>v.sort.direction=e.currentTarget.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+              </label>
+              <label class="property-label">Page size (1–25)<input type="number" min="1" max="25" value={selectedView.pageSize} onchange={e=>editDataView(v=>v.pageSize=Number(e.currentTarget.value))} /></label>
+              <label class="property-label">Searchable field
+                <select value={selectedView.filters.find(f=>f.source==='search')?.field??''} onchange={e=>setViewSearchField(e.currentTarget.value)}>
+                  <option value="">No search filter</option>
+                  {#each (selectedViewModel?.fields??[]).filter(f=>['string','text'].includes(f.type)) as field (field.id)}<option value={field.name}>{field.name}</option>{/each}
+                </select>
+              </label>
+              <p class="hint">Published query · {selectedView.filters.map(f=>`${f.source}: ${f.field} ${f.operator}`).join(' · ')||'No filters'}. Only published field names, typed predicates and bounded results are accepted.</p>
+              <pre class="hint">{JSON.stringify({sort:selectedView.sort,filters:selectedView.filters,pageSize:selectedView.pageSize},null,2)}</pre>
+            {/if}
+          {/if}
           {#if selected.type==='button'}
             <div class="section-label">ON CLICK</div>
             <p class="hint">{workflowForButton(project,activeId,selected.id)?.name??'Uses the legacy button action until a workflow is connected.'}</p>

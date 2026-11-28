@@ -116,6 +116,16 @@ jobs:
           npm test
           npm run check
           npm run build
+      - name: Export, verify and compile reusable data-view application
+        run: |
+          npm run views:generate -- "$RUNNER_TEMP/vas20-data-views.json"
+          npm run app:export -- --project "$RUNNER_TEMP/vas20-data-views.json" --out "$RUNNER_TEMP/vas20-data-views"
+          cd "$RUNNER_TEMP/vas20-data-views"
+          npm install
+          npm run verify:release
+          npm test
+          npm run check
+          npm run build
       - name: Export and compile master-detail Customer Order application
         run: |
           npm run master-detail:generate -- "$RUNNER_TEMP/vas19-master-detail.json"

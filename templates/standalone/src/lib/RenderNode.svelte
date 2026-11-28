@@ -1,6 +1,10 @@
 <script>
+  import ViewTable from '#lib/studio/ViewTable.svelte';
   /** Recursive, metadata-only UI renderer. No project-supplied expressions or HTML execute. */
   export let node;
+  export let project;
+  export let pageId;
+  export let runtimeActive = false;
   export let fields;
   export let records;
   export let selected;
@@ -26,7 +30,7 @@
   <section class:columns={node.type === 'columns'} class="container">
     {#if props.title}<h2>{props.title}</h2>{/if}
     {#each node.children ?? [] as child (child.id)}
-      <svelte:self node={child} {fields} {records} {selected} {primaryNames} {detailRecords} {relatedRecords} {relatedErrors} {changeRelatedPage} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
+      <svelte:self node={child} {project} {pageId} {runtimeActive} {fields} {records} {selected} {primaryNames} {detailRecords} {relatedRecords} {relatedErrors} {changeRelatedPage} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
     {/each}
   </section>
 {:else if node.type === 'heading'}
@@ -69,6 +73,8 @@
       <dl>{#each columns as col}<dt>{col}</dt><dd>{String(detailRecords[props.bindingModelId][col] ?? '—')}</dd>{/each}</dl>
     {:else}<p>Choose a record from the related list to view its details.</p>{/if}
   </section>
+{:else if node.type === 'table' && props.dataViewId}
+  <ViewTable {node} {project} {pageId} {records} {selected} {runtimeActive} onSelect={item=>choose(props.bindingModelId,item,props.detailPageId??'')} />
 {:else if node.type === 'table'}
   <section class="table-wrap"><h3>{props.title}</h3>
     {#if !props.bindingModelId}<p>Bind this table to a model to display records.</p>

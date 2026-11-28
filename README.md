@@ -1,3 +1,25 @@
+# Visual Application Studio v2.0 — Versioned visual data views
+
+VAS v2.0 introduces reusable **Data Views** for visual tables: author a published, typed record query once and attach it to compatible tables. Each view specifies approved output columns (maximum 12), an optional text search, optional fixed-value predicates, and a deterministic sort with a primary-key tie-breaker. Page sizes are bounded to 1–25 records with a maximum page index of 40. These are declarative data contracts, **not user-authored SQL**.
+
+## Visual workflow
+
+1. In **Pages & tree**, select a table bound to an entity. Click **Create reusable data view** in the inspector or choose an existing compatible view.
+2. Configure the view's name, sort field, direction, page size, and optional searchable text field. Multiple tables may reference the same versioned view.
+3. Preview in memory without database writes, or use the published localhost MySQL runtime to filter and paginate through the authenticated read-only API.
+4. For a Customer → Orders relationship table, create a view with a bound foreign-key parent filter. The client sends only the selected parent record ID; the server checks the published relationship, authenticates both models, verifies the parent exists and executes an allowlisted parameterised query.
+5. To reproduce this scenario in a standalone generated app, run:
+
+```bash
+node scripts/generate-view-fixture.mjs /tmp/vas20.project.json
+npm run app:export -- --project /tmp/vas20.project.json --out /tmp/vas20-app
+cd /tmp/vas20-app && npm install && npm run verify:release && npm test && npm run check && npm run build
+```
+
+**Compatibility and limitations:** v1.9 projects remain valid without migration; legacy tables retain their prior behaviour. Local runtime and generated apps remain restricted to loopback development with no hosted production identity. Views are read-only, must reference published metadata, and cannot execute expressions, scripting or dynamic SQL. `tests/data-views.mysql.test.mjs` runs against the disposable GitHub MySQL CI service and checks role denials, parent isolation, search, sorting and pagination. Never place real customer records in this prototype.
+
+---
+
 # Visual Application Studio v1.9 — Visual master/detail relationships
 
 VAS 1.9 adds **Generate master-detail pages** in the Data Model inspector. Select a parent entity, choose a child foreign-key relationship, and VAS creates two editable pages: a parent record selector with a paginated related-child table, and a selected child detail page with return navigation. The record table inspector exposes the parent model, published foreign-key field and detail-page destination; a **Selected record** display component renders the chosen child. Existing v1.8 projects remain valid (schema v3, no database migration).

@@ -241,7 +241,7 @@
     {#if runtime && !runtime.enabled}<p class="warning">Database runtime unavailable. This generated application remains usable for navigation and layout preview, but persistent records require configured localhost MySQL and a local account.</p>{/if}
     <div class="canvas">
       {#each renderPageComponents(project,currentPage,{fields,records,selected}) as node (node.id)}
-        <RenderNode {node} {fields} {records} {selected} {primaryNames} {detailRecords} {relatedRecords} {relatedErrors} {changeRelatedPage} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
+        <RenderNode {node} {project} pageId={currentPage.id} runtimeActive={Boolean(runtime?.authenticated)} {fields} {records} {selected} {primaryNames} {detailRecords} {relatedRecords} {relatedErrors} {changeRelatedPage} {busy} {action} {change} {choose} {referenceOptions} {referenceQueries} {referenceErrors} {changeReferenceQuery} />
       {/each}
     </div>
   </main></div>
