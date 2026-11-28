@@ -13,7 +13,7 @@ test('v2.0 published view filters and parent restrictions against disposable MyS
  const parentTable='vas_clients_'+suffix,childTable='vas_orders_'+suffix;
  const q=name=>'`'+name+'`';
  try{
-  await db.query(`CREATE TABLE ${q(parentTable)} (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(255) NOT NULL)`);
+  await db.query(`CREATE TABLE ${q(parentTable)} (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(255) NOT NULL,email VARCHAR(255) NULL)`);
   await db.query(`CREATE TABLE ${q(childTable)} (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(255) NOT NULL,customer_id BIGINT UNSIGNED NOT NULL,amount DECIMAL(18,4) NOT NULL,KEY (customer_id),CONSTRAINT ${q('fk_'+suffix)} FOREIGN KEY (customer_id) REFERENCES ${q(parentTable)}(id))`);
   await db.execute(`INSERT INTO ${q(parentTable)} (name) VALUES (?),(?)`,['Beta','Alpha']);
   await db.execute(`INSERT INTO ${q(childTable)} (name,customer_id,amount) VALUES (?,?,?),(?,?,?),(?,?,?)`,['B-1',1,'4.00','A-1',2,'2.00','A-2',2,'8.00']);
