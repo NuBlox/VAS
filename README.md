@@ -1,3 +1,15 @@
+# Visual Application Studio v2.1 — Visual Query Builder
+
+VAS v2.1 adds a **visual AND-filter builder** to reusable v2.0 data views. Authors can select published model fields, allowlisted operators, typed constants, form inputs and selected-record IDs, then reorder predicates without writing SQL. The inspector explains the effective published predicates and binding values. The shared data-view table refreshes when inputs change in both Studio and generated apps.
+
+The localhost-only MySQL runtime compiles parameterised queries exclusively from the validated published view. Dynamic binding requests cannot supply model names, SQL identifiers or operators. Referenced selected-record values require read permission and record existence, and mandatory parent filters remain enforced. Missing bindings produce no offline data and do not trigger live reads. Results are capped at 25 per page and 41 pages, with deterministic ordering. At most five AND filters are supported.
+
+Validation: `npm test` includes typed binding, permission and injection tests. The real MySQL test runs with `MYSQL_INTEGRATION=1` in the disposable CI database. CI also generates and compiles the independent Customer/Order query-builder application; a fresh local export can be created with `npm run query:generate -- /tmp/vas-v21.project.json` followed by `npm run app:export -- --project /tmp/vas-v21.project.json --out /tmp/vas-v21-app`.
+
+No schema migration is required for v2.1 metadata. The development runtime is **not approved for public deployment**; it provides no production identity or row-level tenancy.
+
+---
+
 # Visual Application Studio v2.0 — Versioned visual data views
 
 VAS v2.0 introduces reusable **Data Views** for visual tables: author a published, typed record query once and attach it to compatible tables. Each view specifies approved output columns (maximum 12), an optional text search, optional fixed-value predicates, and a deterministic sort with a primary-key tie-breaker. Page sizes are bounded to 1–25 records with a maximum page index of 40. These are declarative data contracts, **not user-authored SQL**.

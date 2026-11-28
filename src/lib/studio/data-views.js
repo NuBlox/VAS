@@ -10,6 +10,15 @@ const validIdentifier=/^[a-z][a-z0-9_]{0,63}$/;
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const keys=(obj,allowed)=>Object.keys(obj).every(k=>allowed.includes(k));
 function assertion(condition,message){if(!condition)throw new Error(message);}
+export function operatorsForField(type){ return [...(allowedOps[type]??[])]; }
+export function defaultLiteral(field){
+  if(!field)throw Error('Missing data-view field');
+  if(field.type==='boolean')return false;
+  if(['integer','decimal'].includes(field.type))return 0;
+  if(field.type==='date')return '2026-01-01';
+  if(field.type==='datetime')return '2026-01-01T00:00:00';
+  return 'value';
+}
 export function viewField(model,name){return model?.fields.find(f=>f.name===name);}
 export function createDataView(model,{id=`view_${Math.random().toString(36).slice(2,10)}`,name=`${model.name} view`,parentField=''}={}){
   const columns=model.fields.filter(f=>f.type!=='text').slice(0,6).map(f=>f.name);
@@ -42,8 +51,12 @@ export function validateDataViews(project){
     let searchCount=0,parentCount=0;
     for(const f of view.filters){
       const field=viewField(model,f?.field);
-      assertion(plain(f)&&keys(f,['field','operator','source','value'])&&field&&allowedOps[field.type]?.has(f.operator)&&
-        ['literal','search','parent'].includes(f.source),'Invalid data-view filter');
+      assertion(plain(f)&&keys(f,['field','operator','source','value','binding'])&&field&&allowedOps[field.type]?.has(f.operator)&&
+        ['literal','search','parent','form','selected'].includes(f.source),'Invalid data-view filter');
+      if(['form','selected'].includes(f.source)){
+        assertion(typeof f.binding==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,119}$/.test(f.binding),
+          'Invalid data-view binding');
+      } else assertion(!Object.hasOwn(f,'binding'),'Only dynamic field bindings may declare a binding');
       if(f.source==='literal'){
         assertion(Object.hasOwn(f,'value')&&f.value!==null&&f.value!==''&&
           ['string','number','boolean'].includes(typeof f.value),'Data-view literal must be a typed value');
@@ -76,6 +89,23 @@ export function validateDataViews(project){
         assertion(node.type==='table'&&view&&node.props.bindingModelId===view.modelId,'Invalid table data-view binding');
         const columns=String(node.props.columns??'').split(',').map(s=>s.trim()).filter(Boolean);
         assertion(columns.length>=1&&columns.every(c=>view.columns.includes(c)),'Table columns must be exposed by the data view');
+        for(const filter of view.filters){
+          if(filter.source==='form'){
+            const found=[];
+            const scan=nodes=>{for(const n of nodes){if(['input','textarea','select','checkbox'].includes(n.type)&&n.props?.field===filter.binding)found.push(n);if(n.children)scan(n.children);}};
+            scan(page.components);
+            assertion(found.length===1,'Data-view form binding must refer to one field on the current page');
+            const bound=found[0],model=models.get(bound.props.bindingModelId),typed=model?.fields.find(f=>f.id===bound.props.bindingFieldId);
+            const expected=viewField(models.get(view.modelId),filter.field);
+            if(typed)assertion(typed.type===expected.type,'Data-view form binding type does not match its filter field');
+            if(bound.type==='checkbox')assertion(expected.type==='boolean','Checkbox data-view binding must use boolean field');
+          }
+          if(filter.source==='selected'){
+            const selectedModel=models.get(filter.binding),selectedPrimary=selectedModel?.fields.find(f=>f.primary);
+            const expected=viewField(models.get(view.modelId),filter.field);
+            assertion(selectedPrimary&&selectedPrimary.type===expected.type,'Selected-record binding must match a published primary key type');
+          }
+        }
         const parentFilter=view.filters.find(f=>f.source==='parent');
         if(parentFilter){
           const model=models.get(view.modelId),field=viewField(model,parentFilter.field);
@@ -104,11 +134,28 @@ export function viewForComponent(project,pageId,componentId){
   const parent=foreign?project.models.find(m=>m.id===foreign.referenceModelId):null;
   return {view,model,parent,foreign,node};
 }
-export function inspectDataView(view,records,{query='',parentId='',page=0}={}){
+/** Resolve only approved, indexed, typed dynamic bindings. The view controls the keys. */
+export function assertViewBindings(view,bindings={}){
+  assertion(plain(bindings),'Invalid data-view bindings');
+  const expected=view.filters.flatMap((f,i)=>['form','selected'].includes(f.source)?[String(i)]:[]);
+  assertion(Object.keys(bindings).length===expected.length&&Object.keys(bindings).every(key=>expected.includes(key)),
+    'Missing or unapproved data-view binding');
+  for(const key of expected)assertion(Object.hasOwn(bindings,key)&&bindings[key]!==null&&bindings[key]!==undefined&&bindings[key]!==''&&
+    ['string','number','boolean'].includes(typeof bindings[key]),'Missing or invalid data-view binding');
+  return bindings;
+}
+export function describeDataView(view,bindings={}){
+  return view.filters.map((f,i)=>({field:f.field,operator:f.operator,source:f.source,
+    binding:f.binding??null,value:f.source==='literal'?f.value:f.source==='form'||f.source==='selected'?bindings[i]??null:null,
+    resolved:f.source==='literal'||['form','selected'].includes(f.source)&&bindings[i]!==undefined}));
+}
+/** Read-only deterministic preview: absent typed bindings fail closed. */
+export function inspectDataView(view,records,{query='',parentId='',page=0,bindings={}}={}){
   if(view.filters.some(f=>f.source==='parent')&&(parentId===null||parentId===undefined||parentId===''))return {records:[],page,pageSize:view.pageSize,hasMore:false,total:0};
-  const tests=view.filters.filter(f=>f.source!=='search'||query);
-  const clean=records.filter(record=>tests.every(f=>{
-    const value=f.source==='literal'?f.value:f.source==='search'?query:parentId;
+  try{assertViewBindings(view,bindings);}catch{return {records:[],page,pageSize:view.pageSize,hasMore:false,total:0};}
+  const tests=view.filters.map((f,i)=>({f,i})).filter(({f})=>f.source!=='search'||query);
+  const clean=records.filter(record=>tests.every(({f,i})=>{
+    const value=f.source==='literal'?f.value:f.source==='search'?query:f.source==='parent'?parentId:bindings[i];
     const recordValue=record[f.field];
     if(f.operator==='contains')return String(recordValue??'').toLowerCase().includes(String(value).toLowerCase());
     if(f.operator==='eq')return String(recordValue??'')===String(value);
